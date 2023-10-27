@@ -1,0 +1,60 @@
+import numpy as np
+from scipy import integrate as ingt
+
+"""
+This quirky little sausage is just an implementation of Martin et al 2016's MCMC
+dwarf galaxy structural parameter algorithm. It takes ra and dec for stars and 
+determines the centroid, half light radius, position angle and ellipticity.It also
+takes user defined priors etc.
+"""
+
+def lphot(params, x, y):
+    # Initialise structural paramters (central coordinates, half-light radius, ellipticity and position angle)
+    x0, y0, rh, e, theta, n = params
+    
+    #Setting up elliptical radius (Eq. 5 Martin et al. 2016)
+    r1 = (1 / (1 - e) * ((x - x0) * np.cos(theta) - (y - y0) * np.sin(theta))) **2 
+    r2 =((x - x0) * np.sin(theta) + (y - y0) * np.cos(theta)) ** 2
+    r = np.sqrt(r1 + r2) * 180. * 60. / np.pi # into arcmins
+    
+    # MNumber of stars in the field
+    n1 = len(r)
+    
+    #Setting up the exponential radial density profile (eq. 3 Martin et al 2016)
+    
+    def rhod(r, rh, e, n):
+        return (1.68 ** 2 / (2 * np.pi * rh **2 * (1 - e)) * n * np.exp(-1.68 * r / rh))
+  
+  	# Prepping a function to integrate over the area of the dwarf galaxy (assumed circular)
+
+    def rhoA(r, rh, e, n):
+        return 2*np.pi*r*rhod(r,rh,e,n)
+
+    
+    # Implementing eq. 6 from Martin et al. 2016 to get the background level
+    sigb = (n1 - ingt.quad(rhoA, 0, np.max(r), args= (rh, e, n))[0])/ (np.pi*np.max(r)**2)
+    rhom = (rhod(r,rh,e,n) + sigb)/ (n+sigb*np.pi*np.max(r)**2) # Normalised by the number of stars in model
+
+    # checking for NaN
+    c1 = (np.isfinite(np.log(rhom)))
+    
+    return sum(np.log(rhom[c1]))
+
+### Defining our priors - broad, uniform values, the same as Martin et al. 2016. User can specify limits on x, y and rh.
+
+ 
+def prior(params, priors):
+    x0, y0, rh, e, theta, n = params
+    xd, xu, yd, yu, rhu = priors
+    if 0 <= theta <= np.pi and 0 <= rh <= rhu and 0 <= e <= 1 and 0 <= n: #and xd <= x0 <= xu and yd <= y0 <= yu:
+        return 1.0
+    return -np.inf
+
+### Function to call priors and PDF function
+
+def lnp(params, priors, x, y):
+    lp = prior(params, priors)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + lphot(params, x, y)
+
