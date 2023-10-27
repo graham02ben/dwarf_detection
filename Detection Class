@@ -1,0 +1,1144 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Sep 21 12:03:28 2023
+
+@author: bboyg
+"""
+import Functions as f
+from numpy import inf
+import cv2
+import numpy as np
+from astropy.table import Table
+from PIL import Image
+from sklearn.cluster import KMeans
+import sklearn.metrics
+import astropy.units as u
+from astropy.coordinates import SkyCoord, get_icrs_coordinates, Angle
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import math as m
+import emcee
+import corner
+import martin_sp as msp
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+import warnings
+warnings.filterwarnings('ignore')
+
+class DataAnalysis():
+    def __init__(self, ra_file, dec_file):
+        self.RA_FILE = ra_file
+        self.DEC_FILE = dec_file
+        self.Folder = f'DATA/ra{self.RA_FILE}/dec{self.DEC_FILE}'
+        self.isochrone_data = None 
+        self.telescope_image = None
+        self.star_map = None
+        self.galaxy_map = None 
+        self.star_and_galaxy_map = None
+        self.significance_map = None
+        self.cluster_labels = None
+        self.cluster_centers = None
+        self.visualize_cluster_results = None
+        self.silhouette_avg = None
+        self.calinski_harabasz_avg = None
+        self.davies_bouldin_avg = None
+        self.elbow_point = None
+        self.wcss = None
+        self.range_n_clusters = range(2, 40)
+        self.ra_star_data = None  # Add ra_star_data as a class attribute
+        self.dec_star_data = None
+        self.ra_galaxy_data = None
+        self.dec_galaxy_data = None
+        self.gmag_star_data = None
+        self.rmag_star_data = None
+        self.ra_data = None
+        self.dec_data = None
+        self.NewIsog = None
+        self.NewIsoG = None
+        self.NewIsor = None
+        self.NewIsoR = None
+        self.xs = None
+        self.ys = None
+        self.xg = None
+        self.yg = None
+        self.xsg = None
+        self.ysg = None
+        self.xbins = None
+        self.ybins = None
+        self.xbing = None
+        self.ybing = None
+        self.xbinsg = None
+        self.ybinsg = None
+        self.telecoords = None
+        self.IPB_masked = None
+        self.significant_coords_RA = None
+        self.significant_coords_Dec = None
+        self.radius = 0.016667
+        self.radiusin = 0.0288667 #in degrees
+        self.radiusout = 0.0333333 # in degrees
+        self.size = 0.01 # Size (in degrees) of each bin
+        self.isochrone_labels = None
+        self.ra_cmd = None
+        self.dec_cmd = None
+        self.x0m33 = None
+        self.y0m33 = None
+        self.rhm33 = None
+        self.em33 = None
+        self.tm33 = None
+        self.nm33 = None
+        self.Candidate_Coords = None
+        self.c_immap = None
+        self.five_arcmin = None
+        self.rar = None
+        self.significance_maps = None
+        self.significance_mapg = None
+        self.significance_mapsg = None
+        self.decr = None
+        self.COORDINATES = None
+        self.COORDINATEG = None
+        self.COORDINATESG = None
+        self.COORDINATET = None
+        
+    def load_and_process_survey_data(self):
+        # Load and process survey data
+        data = Table.read(self.Folder + '/result_ra' + str(self.RA_FILE) + '_dec' + str(self.DEC_FILE) + '.txt', format="csv", header_start=0)
+        #data = Table.read(self.Folder + '/data.txt', format="csv", header_start=0)
+        mask = (data["dered_mag_g"] > -100) & (data["dered_mag_r"] > -100)
+        data = data[:][mask]
+        ra = data['ra']  # Creating labels for the table and what they equal to
+        dec = data['dec']
+        gmag = data["dered_mag_g"]
+        rmag = data["dered_mag_r"]
+        type = data["type"]
+
+        # Selection criteria for stars and galaxies
+        star = type == 'PSF'
+        galaxy = type != 'PSF'
+
+        # Assign relevant data to class attributes
+        self.ra_data = ra
+        self.dec_data = dec
+        self.ra_star_data = ra[star]
+        self.dec_star_data = dec[star]
+        self.ra_galaxy_data = ra[galaxy]
+        self.dec_galaxy_data = dec[galaxy]
+        self.gmag_star_data = gmag[star]
+        self.rmag_star_data = rmag[star]
+
+    def load_isochrone_data(self):
+        # Define isochrone labels of interest
+        self.isochrone_labels = [-2,-1.9,-1.8,-1.7,-1.6,-1.5]
+        #===================================================================
+        #Isochrones
+        #===================================================================  
+        label2, isogmag2, isormag2 = np.loadtxt("Isochrone/Isochrone_mp_-2.txt", unpack=True, usecols=(9, 29, 30), dtype = 'f,f,f')
+        label19, isogmag19, isormag19 = np.loadtxt("Isochrone/Isochrone_mp_-1.9.txt", unpack=True, usecols=(9, 29, 30), dtype = 'f,f,f')
+        label18, isogmag18, isormag18 = np.loadtxt("Isochrone/Isochrone_mp_-1.8.txt", unpack=True, usecols=(9, 29, 30), dtype = 'f,f,f')
+        label17, isogmag17, isormag17 = np.loadtxt("Isochrone/Isochrone_mp_-1.7.txt", unpack=True, usecols=(9, 29, 30), dtype = 'f,f,f')
+        label16, isogmag16, isormag16 = np.loadtxt("Isochrone/Isochrone_mp_-1.6.txt", unpack=True, usecols=(9, 29, 30), dtype = 'f,f,f')
+        label15, isogmag15, isormag15 = np.loadtxt("Isochrone/Isochrone_mp_-1.5.txt", unpack=True, usecols=(9, 29, 30), dtype = 'f,f,f')
+        ###Distance Modulus
+        d = 800000 #pc
+        DM = 5*np.log10(d)-5 
+        ###Input which Isochrone label want to focus on
+        isolabel = 4
+        Isolabel = 3
+        #Slicing so get gmag and rmag with only that label
+        Isogmag = [isogmag2[label2 == isolabel],isogmag19[label19 == isolabel],isogmag18[label18 == isolabel],isogmag17[label17 == isolabel],isogmag16[label16 == isolabel],isogmag15[label15 == isolabel]]
+        IsoGmag = [isogmag2[label2 == Isolabel],isogmag19[label19 == Isolabel],isogmag18[label18 == Isolabel],isogmag17[label17 == Isolabel],isogmag16[label16 == Isolabel],isogmag15[label15 == Isolabel]]
+        Isormag = [isormag2[label2 == isolabel],isormag19[label19 == isolabel],isormag18[label18 == isolabel],isormag17[label17 == isolabel],isormag16[label16 == isolabel],isormag15[label15 == isolabel]]
+        IsoRmag = [isormag2[label2 == Isolabel],isormag19[label19 == Isolabel],isormag18[label18 == Isolabel],isormag17[label17 == Isolabel],isormag16[label16 == Isolabel],isormag15[label15 == Isolabel]]
+        #correcting using distance modulus  
+        NewIsog = []
+        NewIsoG = []
+        NewIsor = []
+        NewIsoR = []
+        for i in range (len(Isogmag)):
+            NewIsog.append(Isogmag[i]+DM)
+            NewIsoG.append(IsoGmag[i]+DM)
+            NewIsor.append(Isormag[i]+DM)
+            NewIsoR.append(IsoRmag[i]+DM)
+        self.NewIsog = NewIsog
+        self.NewIsoG = NewIsoG
+        self.NewIsor = NewIsor
+        self.NewIsoR = NewIsoR
+        
+        
+    def load_and_process_telescope_image(self):
+        # Load the telescope image using OpenCV
+        image_path = f'{self.Folder}/img_ra{self.RA_FILE}_dec{self.DEC_FILE}.jpg'
+        #image_path = f'{self.Folder}/img.JPG'
+        img = cv2.imread(image_path)
+        # flip the image
+        img = cv2.flip(img, 1)
+
+        # Apply Gaussian blur
+        img = f.gaussian_blur(img, 15)
+
+        # Create a circular mask
+        mask = np.zeros_like(img)
+        circ = img.shape[0] // 2
+        xc = img.shape[0] // 2
+        yc = img.shape[1] // 2
+        cv2.circle(mask, (xc, yc), circ, (255, 255, 255), thickness=-1)
+
+        # Apply the mask to the image
+        img = img * (mask / 255)
+
+        # Rotate the image (e.g., 90 degrees clockwise)
+        img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+
+        # Store the processed telescope image
+        self.telescope_image = img
+
+    def create_star_map(self):
+        # Assuming self.telescope_image is already processed
+        # Define parameters for creating the star map
+        significance_threshold = 3.0 # Threshold for significance
+
+        # Create a 2D histogram of the telescope image
+        immaps, xbins, ybins = np.histogram2d(
+            self.ra_star_data, self.dec_star_data,
+            bins=(np.arange(np.min(self.ra_star_data), np.max(self.ra_star_data), self.size),
+                  np.arange(np.min(self.dec_star_data), np.max(self.dec_star_data), self.size))
+        )
+        #store bins
+        self.xbins = xbins
+        self.ybins = ybins
+        # Create a significance map
+        self.significance_maps = (immaps - np.mean(immaps)) / np.std(immaps)
+        # Create a star map by applying a significance threshold
+        xs,ys=np.where(self.significance_maps>significance_threshold) 
+        # Store the star map
+        self.xs = xs
+        self.ys = ys
+
+        # Plot the star map
+        plt.imshow(self.significance_maps.T, origin='lower',
+                   extent=[xbins[0], xbins[-1], ybins[0], ybins[-1]],
+                   cmap='plasma', interpolation='gaussian',
+                   aspect='auto')
+        plt.colorbar()
+        plt.scatter(xbins[xs]+self.size/2,ybins[ys]+self.size/2,marker='o',s=3,edgecolors = 'w')
+        plt.title('Star Map')
+        plt.xlabel('Right Ascension (deg)')
+        plt.ylabel('Declination (deg)')
+        #plt.figure(figsize=(10, 10))
+        plt.show()
+
+    def create_galaxy_map(self):
+        # Define parameters for creating the galaxy map
+        significance_threshold = 3.0  # Threshold for significance
+
+        # Create a 2D histogram of the telescope image for galaxies
+        immapg, xbing, ybing = np.histogram2d(
+            self.ra_galaxy_data, self.dec_galaxy_data,
+            bins=(np.arange(np.min(self.ra_galaxy_data), np.max(self.ra_galaxy_data), self.size),
+                  np.arange(np.min(self.dec_galaxy_data), np.max(self.dec_galaxy_data), self.size)),
+        )
+        self.xbing = xbing
+        self.ybing = ybing
+        # Create a significance map for galaxies
+        self.significance_mapg = (immapg - np.mean(immapg)) / np.std(immapg)
+
+        # Create a galaxy map by applying a significance threshold
+        xg, yg = np.where(self.significance_mapg > significance_threshold)
+
+        # Store the galaxy map
+        self.xg = xg
+        self.yg = yg
+
+        # Optionally, you can plot the galaxy map
+        plt.imshow(self.significance_mapg.T, origin='lower',
+                   extent=[xbing[0], xbing[-1], ybing[0], ybing[-1]],
+                   cmap='plasma', interpolation='gaussian',
+                   aspect='auto')
+        plt.colorbar()
+        plt.scatter(xbing[xg]+self.size/2,ybing[yg]+self.size/2,marker='o',s=3,edgecolors = 'w')
+        plt.title('Galaxy Map')
+        plt.xlabel('Right Ascension (deg)')
+        plt.ylabel('Declination (deg)')
+        #plt.figure(figsize=(10, 10))
+        plt.show()
+        
+    def create_star_and_galaxy_map(self):
+        # Define parameters for creating the galaxy map
+        significance_threshold = 3.0 # Threshold for significance
+
+        # Create a 2D histogram of the telescope image for galaxies
+        immapsg, xbinsg, ybinsg = np.histogram2d(
+            self.ra_data, self.dec_data,
+            bins=(np.arange(np.min(self.ra_data), np.max(self.ra_data), self.size),
+                  np.arange(np.min(self.dec_data), np.max(self.dec_data), self.size)),
+        )
+        self.xbinsg = xbinsg
+        self.ybinsg = ybinsg
+        # Create a significance map for galaxies
+        self.significance_mapsg = (immapsg - np.mean(immapsg)) / np.std(immapsg)
+
+        # Create a galaxy map by applying a significance threshold
+        xsg, ysg = np.where(self.significance_mapsg > significance_threshold)
+
+        # Store the galaxy map
+        self.xsg = xsg
+        self.ysg = ysg
+
+        # Optionally, you can plot the galaxy map
+        plt.imshow(self.significance_mapsg.T, origin='lower',
+                   extent=[xbinsg[0], xbinsg[-1], ybinsg[0], ybinsg[-1]],
+                   cmap='plasma', interpolation='gaussian',
+                   aspect='auto')
+        plt.colorbar()
+        plt.scatter(xbinsg[xsg]+self.size/2,ybinsg[ysg]+self.size/2,marker='o',s=3,edgecolors = 'w')
+        plt.title('Star and Galaxy Map')
+        plt.xlabel('Right Ascension (deg)')
+        plt.ylabel('Declination (deg)')
+        #plt.figure(figsize=(10, 10))
+        plt.show()
+    def create_significance_map(self):
+        IPB = (self.telescope_image - np.mean(self.telescope_image)) / np.std(self.telescope_image)
+        height, width = self.telescope_image.shape[:2] # Get the shape of the image
+        x_values = np.arange(width)  # Array of column indices
+        y_values = np.arange(height)  # Array of row indices
+        xx, yy = np.meshgrid(x_values, y_values)
+        x_flat = xx.flatten()
+        y_flat = yy.flatten()
+        # Determine significance value for each pixel
+        significance_values = IPB[x_flat, y_flat]
+        # Create a mask based on significance threshold (e.g., 5)
+        significance_mask = significance_values < 1 #(np.max(significance_values)//2)
+        # Apply the mask to the original image
+        # Reshape the mask to match the shape of the image
+        significance_mask = significance_mask.reshape((width, height))
+        # Apply the mask to the original image
+        masked_img = self.telescope_image * significance_mask # Apply the mask
+        # Recompute IPB for the masked image
+        IPB_masked = (masked_img - np.mean(masked_img)) / np.std(masked_img)
+        sig_values = IPB_masked[x_flat, y_flat]
+        # Create a mask based on significance threshold (e.g., 10)
+        sig_mask = sig_values > 5
+        # Reshape the mask to match the original image dimensions
+        sig_mask = sig_mask.reshape((width, height)) # This is true false
+        significant_coords = np.argwhere(sig_mask)
+        RA_min = self.xbinsg[0]
+        RA_max = self.xbinsg[-1]
+        Dec_min = self.ybinsg[0]
+        Dec_max = self.ybinsg[-1]
+        # Convert pixel indices to sky coordinates
+        significant_coords_RA = RA_min + (significant_coords[:, 1] / width) * (RA_max - RA_min)
+        significant_coords_Dec = Dec_min + (significant_coords[:, 0] / height) * (Dec_max - Dec_min)
+        telecoords = np.column_stack((significant_coords_RA, significant_coords_Dec))
+        self.telecoords = telecoords
+        self.IPB_masked = IPB_masked
+        self.significant_coords_RA = significant_coords_RA
+        self.significant_coords_Dec = significant_coords_Dec
+
+    def perform_cluster_analysis(self):
+        # Assuming you have relevant data for clustering (e.g., significant coordinates)
+        # Define a range of cluster numbers to evaluate
+        # Initialize lists to store evaluation metrics
+        silhouette_avg = []
+        calinski_harabasz_avg = []
+        davies_bouldin_avg = []
+        for num_clusters in self.range_n_clusters:
+            # Initialize K-means clustering with a specific number of clusters
+            kmeans = KMeans(n_clusters=num_clusters, init='k-means++', n_init=10)
+            kmeans.fit(self.telecoords)
+            cluster_labels = kmeans.labels_
+
+            # Calculate silhouette score
+            silhouette_avg.append(sklearn.metrics.silhouette_score(self.telecoords, cluster_labels))
+            # Calculate Calinski-Harabasz score (Variance Ratio Criterion)
+            calinski_harabasz_avg.append(sklearn.metrics.calinski_harabasz_score(self.telecoords, cluster_labels))
+            # Calculate Davies-Bouldin score
+            davies_bouldin_avg.append(sklearn.metrics.davies_bouldin_score(self.telecoords, cluster_labels))
+        self.silhouette_avg = silhouette_avg
+        self.calinski_harabasz_avg = calinski_harabasz_avg
+        self.davies_bouldin_avg = davies_bouldin_avg
+        wcss = []
+        for i in (self.range_n_clusters):
+            kmeans = KMeans(n_clusters=i, init='k-means++', random_state=42)
+            kmeans.fit(self.telecoords)
+            wcss.append(kmeans.inertia_)
+        wcss_diff = np.diff(wcss)
+        # Calculate the percentage change between consecutive differences
+        percentage_change = (wcss_diff / wcss_diff[0]) * 100
+        # Find the elbow point as the first K where the percentage change drops significantly
+        elbow_point = np.argmax(percentage_change < 10) + 2 
+        self.elbow_point = elbow_point
+        self.wcss = wcss
+        # Determine the optimal number of clusters based on evaluation metrics
+        if davies_bouldin_avg.index(min(davies_bouldin_avg))+2 >= elbow_point:
+            optimal_num_clusters_davies_bouldin = davies_bouldin_avg.index(min(davies_bouldin_avg)) + 2
+        else:
+            optimal_num_clusters_davies_bouldin = elbow_point
+
+        # Choose the number of clusters based on the evaluation metric of your choice (e.g., Silhouette)
+        num_clusters = optimal_num_clusters_davies_bouldin
+
+        # Initialize K-means clustering with the chosen number of clusters
+        kmeans = KMeans(n_clusters=num_clusters, init='k-means++', n_init=10)
+        kmeans.fit(self.telecoords)
+
+        # Get cluster labels and cluster centers
+        cluster_labels = kmeans.labels_
+        cluster_centers = kmeans.cluster_centers_
+        # Store the results in class attributes
+        self.cluster_labels = cluster_labels
+        self.cluster_centers = cluster_centers
+        # Optionally, you can visualize the cluster results
+        plt.imshow(self.IPB_masked.T, origin='lower', label='Map', 
+                    extent=[self.xbinsg[0], self.xbinsg[-1], self.ybinsg[0], self.ybinsg[-1]],
+                    cmap='plasma', interpolation='gaussian', aspect='auto')
+        plt.colorbar()
+        #Scatter plot significant coordinates on top of the telescope image map
+        plt.scatter(self.significant_coords_RA, self.significant_coords_Dec, marker='o', s=3, c='w')
+        plt.scatter(cluster_centers[:,0],cluster_centers[:,1], marker='*', c='y', s=10)
+        plt.title('Telescope Map', fontsize = 10)
+        plt.xlabel('Right Ascension (deg)', fontsize = 10)
+        plt.ylabel('Declination (deg)', fontsize = 10)
+        plt.figure(figsize=(10, 10))
+
+    def Silhouette_graph(self):
+        print("Optimal number of clusters (Silhouette):", self.silhouette_avg.index(max(self.silhouette_avg))+2)
+        plt.plot(self.range_n_clusters,self.silhouette_avg,'bx-')
+        plt.xlabel('Values of K') 
+        plt.ylabel('Silhouette Score') 
+        plt.title('Silhouette Analysis for Optimal k')
+        plt.show()
+        
+    def Calinski_Harabasz_graph(self):
+        plt.plot(self.range_n_clusters,self.calinski_harabasz_avg,'bx-')
+        plt.xlabel('Values of K') 
+        plt.ylabel('Calinski Harabasz Score') 
+        plt.title('Calinski Harabasz Analysis for Optimal k')
+        plt.show()
+        
+    def Davies_Bouldin_graph(self):
+        print("Optimal number of clusters (Davies Bouldin):", self.davies_bouldin_avg.index(min(self.davies_bouldin_avg))+2)
+        plt.plot(self.range_n_clusters,self.davies_bouldin_avg,'bx-')
+        plt.xlabel('Values of K') 
+        plt.ylabel('Davies Bouldin Score') 
+        plt.title('Davies Bouldin Analysis for Optimal k')
+        plt.show()
+    
+    def Elbow_point_graph(self):
+        print("Optimal number of clusters (elbow point):", self.elbow_point)
+        plt.plot(self.range_n_clusters, self.wcss, marker='o', linestyle='-', color='b')
+        plt.xlabel('Number of Clusters (K)')
+        plt.ylabel('WCSS')
+        plt.title('Elbow Method for Optimal K')
+        plt.grid()
+        # Mark the elbow point on the graph
+        plt.scatter(self.elbow_point, self.wcss[self.elbow_point-2], c='red', marker='x', s=100, label='Elbow Point')
+        plt.legend()
+        plt.show()
+
+
+    def CMD_star(self):
+        self.c_immap = SkyCoord(self.ra_star_data, self.dec_star_data, frame = 'icrs', unit=(u.deg, u.deg))
+        c_Obs = f.setup(self.xbins, self.ybins, self.xs, self.ys, self.size)
+        selects, dselects = f.cuts(c_Obs, self.c_immap, self.radius, self.radiusout, self.radiusin)
+        #selects, dselects = f.cuts(c_Obs, self.c_immap, 0.016667, 0.0333333 , 0.0288667)
+        Cols = 5
+        Rows = m.ceil(len(c_Obs)/Cols)
+        fig, ax = plt.subplots(Rows, Cols, sharey=True)
+        axs = ax.ravel()
+        Object = 1
+        COORDINATES = []
+        oc = 0
+        for i in range (len(c_Obs)):
+            oc+=1
+            if any(value == inf for value in self.gmag_star_data[selects[i]]):
+                continue
+            oc = oc - 1
+            prob = f.isochrone(self.gmag_star_data[selects[i]], self.rmag_star_data[selects[i]],
+                               self.NewIsoG, self.NewIsoR, self.NewIsog, self.NewIsor)
+            PCMavs = f.PCMD_av(self.gmag_star_data[selects[i]] - self.rmag_star_data[selects[i]],
+                               self.rmag_star_data[selects[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
+                               self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
+                               self.NewIsor[prob])
+            fieldprobs = f.PCMD_av(self.gmag_star_data[dselects[i]] - self.rmag_star_data[dselects[i]],
+                                   self.rmag_star_data[dselects[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
+                                   self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
+                                   self.NewIsor[prob])
+            Death = PCMavs/fieldprobs
+            Sels = (Death>1.4)
+            oc+=1
+            if Sels == False:
+                continue
+            oc = oc - 1
+            x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, self.gmag_star_data[selects[i]],
+                                                                                   self.rmag_star_data[selects[i]],
+                                                                                   self.NewIsor, self.NewIsog, self.NewIsoR, 
+                                                                                   self.NewIsoG)
+            oc+=1
+            if np.count_nonzero(inside)<10:
+                continue
+            if np.count_nonzero(insidem)<1:
+                continue
+            oc = oc - 1
+            f.cmd_plot(fig,axs,i-oc,iso3_df['color_G_R'], iso4_df['color_g_r'], 
+                       iso3_df['mag_R'], iso4_df['mag_r'], x, y, loop4_df['color4_loop'], 
+                       loop4_df['mag4_loop'], loop3_df['color3_loop'], loop3_df['mag3_loop'], 
+                       p, self.gmag_star_data[dselects[i]], self.rmag_star_data[dselects[i]], str(Object), i, oc)
+            print('Object',  str(Object), '(S) : Ratio =', Death, 'z =', self.isochrone_labels[prob])
+            print('Coordinates:', c_Obs[i])
+            COORDINATES.append(c_Obs[i])
+            Object = Object + 1
+        #plt.tight_layout()
+        self.COORDINATES = COORDINATES
+        final_rows = m.ceil((len(c_Obs)-oc) / Cols)
+        final_plots = len(c_Obs)-oc
+        if final_rows == 1:
+            fig.set_figheight(40)
+        else:
+            fig.set_figheight(40*final_rows)
+        if final_plots > 5:
+            fig.set_figwidth(30)
+        else:
+            fig.set_figwidth(30 - (3*(5-final_plots)))
+        plt.ylim(20,26)
+        fig.gca().invert_yaxis() 
+        for i in range(oc+((Cols*Rows)-len(c_Obs))):
+            fig.delaxes(axs[(Cols*(m.ceil(len(c_Obs)/Cols))-1)-i]) 
+        plt.show()
+        
+    def CMD_galaxy(self):
+        c_Obg = f.setup(self.xbing, self.ybing, self.xg, self.yg, self.size)
+        selectg, dselectg = f.cuts(c_Obg, self.c_immap, self.radius, self.radiusout, self.radiusin)
+        Cols = 5
+        Rowg = m.ceil(len(c_Obg)/Cols)
+        fig, ax = plt.subplots(Rowg, Cols, sharey=True)
+        axs = ax.ravel()
+        Object = 1
+        COORDINATEG = []
+        oc = 0
+        for i in range (len(c_Obg)):
+            oc+=1
+            if any(value == inf for value in self.gmag_star_data[selectg[i]]):
+                continue
+            oc = oc - 1
+            prob = f.isochrone(self.gmag_star_data[selectg[i]], self.rmag_star_data[selectg[i]],
+                               self.NewIsoG, self.NewIsoR, self.NewIsog, self.NewIsor)
+            PCMavs = f.PCMD_av(self.gmag_star_data[selectg[i]] - self.rmag_star_data[selectg[i]],
+                               self.rmag_star_data[selectg[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
+                               self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
+                               self.NewIsor[prob])
+            fieldprobs = f.PCMD_av(self.gmag_star_data[dselectg[i]] - self.rmag_star_data[dselectg[i]],
+                                   self.rmag_star_data[dselectg[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
+                                   self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
+                                   self.NewIsor[prob])
+            Death = PCMavs/fieldprobs
+            Sels = (Death>1.4)
+            oc+=1
+            if Sels == False:
+                continue
+            oc = oc - 1
+            x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, self.gmag_star_data[selectg[i]],
+                                                                                   self.rmag_star_data[selectg[i]],
+                                                                                   self.NewIsor, self.NewIsog, self.NewIsoR, 
+                                                                                   self.NewIsoG)
+            oc+=1
+            if np.count_nonzero(inside)<10:
+                continue
+            if np.count_nonzero(insidem)<1:
+                continue
+            oc = oc - 1
+            f.cmd_plot(fig,axs,i-oc,iso3_df['color_G_R'], iso4_df['color_g_r'], 
+                       iso3_df['mag_R'], iso4_df['mag_r'], x, y, loop4_df['color4_loop'], 
+                       loop4_df['mag4_loop'], loop3_df['color3_loop'], loop3_df['mag3_loop'], 
+                       p, self.gmag_star_data[dselectg[i]], self.rmag_star_data[dselectg[i]], str(Object), i, oc)
+            print('Object',  str(Object), '(G) : Ratio =', Death, 'z =', self.isochrone_labels[prob])
+            print('Coordinates:', c_Obg[i])
+            COORDINATEG.append(c_Obg[i])
+            Object = Object + 1
+        #plt.tight_layout()
+        self.COORDINATEG = COORDINATEG
+        final_rows = m.ceil((len(c_Obg)-oc) / Cols)
+        final_plots = len(c_Obg)-oc
+        if final_rows == 1:
+            fig.set_figheight(70)
+        else:
+            fig.set_figheight(40*final_rows)
+        if final_plots > 5:
+            fig.set_figwidth(30)
+        else:
+            fig.set_figwidth(30 - (3*(5-final_plots)))
+        plt.ylim(20,26)
+        fig.gca().invert_yaxis() 
+        for i in range(oc+((Cols*Rowg)-len(c_Obg))):
+            fig.delaxes(axs[(Cols*(m.ceil(len(c_Obg)/Cols))-1)-i]) 
+        plt.show()        
+        
+    def CMD_star_and_galaxy(self):
+        c_Obsg = f.setup(self.xbinsg, self.ybinsg, self.xsg, self.ysg, self.size)
+        selectsg, dselectsg = f.cuts(c_Obsg, self.c_immap, self.radius, self.radiusout, self.radiusin)
+        #selects, dselects = f.cuts(c_Obs, self.c_immap, 0.016667, 0.0333333 , 0.0288667)
+        Cols = 5
+        Rowsg = m.ceil(len(c_Obsg)/Cols)
+        fig, ax = plt.subplots(Rowsg, Cols, sharey=True)
+        axs = ax.ravel()
+        Object = 1
+        COORDINATESG = []
+        oc = 0
+        for i in range (len(c_Obsg)):
+            oc+=1
+            if any(value == inf for value in self.gmag_star_data[selectsg[i]]):
+                continue
+            oc = oc - 1
+            prob = f.isochrone(self.gmag_star_data[selectsg[i]], self.rmag_star_data[selectsg[i]],
+                               self.NewIsoG, self.NewIsoR, self.NewIsog, self.NewIsor)
+            PCMavs = f.PCMD_av(self.gmag_star_data[selectsg[i]] - self.rmag_star_data[selectsg[i]],
+                               self.rmag_star_data[selectsg[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
+                               self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
+                               self.NewIsor[prob])
+            fieldprobs = f.PCMD_av(self.gmag_star_data[dselectsg[i]] - self.rmag_star_data[dselectsg[i]],
+                                   self.rmag_star_data[dselectsg[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
+                                   self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
+                                   self.NewIsor[prob])
+            Death = PCMavs/fieldprobs
+            Sels = (Death>1.4)
+            oc+=1
+            if Sels == False:
+                continue
+            oc = oc - 1
+            x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, self.gmag_star_data[selectsg[i]],
+                                                                                   self.rmag_star_data[selectsg[i]],
+                                                                                   self.NewIsor, self.NewIsog, self.NewIsoR, 
+                                                                                   self.NewIsoG)
+            oc+=1
+            if np.count_nonzero(inside)<10:
+                continue
+            if np.count_nonzero(insidem)<1:
+                continue
+            oc = oc - 1
+            f.cmd_plot(fig,axs,i-oc,iso3_df['color_G_R'], iso4_df['color_g_r'], 
+                       iso3_df['mag_R'], iso4_df['mag_r'], x, y, loop4_df['color4_loop'], 
+                       loop4_df['mag4_loop'], loop3_df['color3_loop'], loop3_df['mag3_loop'], 
+                       p, self.gmag_star_data[dselectsg[i]], self.rmag_star_data[dselectsg[i]], str(Object), i, oc)
+            print('Object',  str(Object), '(SG) : Ratio =', Death, 'z =', self.isochrone_labels[prob])
+            print('Coordinates:', c_Obsg[i])
+            COORDINATESG.append(c_Obsg[i])
+            Object = Object + 1
+        #plt.tight_layout()
+        self.COORDINATESG = COORDINATESG
+        final_rows = m.ceil((len(c_Obsg)-oc) / Cols)
+        final_plots = len(c_Obsg)-oc
+        if final_rows == 1:
+            fig.set_figheight(30)
+        else:
+            fig.set_figheight(40*final_rows)
+        if final_plots > 5:
+            fig.set_figwidth(30)
+        else:
+            fig.set_figwidth(30 - (3*(5-final_plots)))
+        plt.ylim(20,26)
+        fig.gca().invert_yaxis() 
+        for i in range(oc+((Cols*Rowsg)-len(c_Obsg))):
+            fig.delaxes(axs[(Cols*(m.ceil(len(c_Obsg)/Cols))-1)-i]) 
+        plt.show()
+        
+    def CMD_telescope(self):
+        t_coords = np.column_stack((self.cluster_centers[:,0],self.cluster_centers[:,1]))
+        ra_degrees = Angle(t_coords[:, 0], unit='degree')
+        dec_degrees = Angle(t_coords[:, 1], unit='degree')
+        c_Obt = SkyCoord(ra=ra_degrees, dec=dec_degrees, frame='icrs')
+        selectt, dselectt = f.cuts(c_Obt, self.c_immap, self.radius, self.radiusout, self.radiusin)
+        #selects, dselects = f.cuts(c_Obs, self.c_immap, 0.016667, 0.0333333 , 0.0288667)
+        Cols = 5
+        Rowt = m.ceil(len(c_Obt)/Cols)
+        fig, ax = plt.subplots(Rowt, Cols, sharey=True)
+        axs = ax.ravel()
+        Object = 1
+        COORDINATET = []
+        oc = 0
+        for i in range (len(c_Obt)):
+            oc+=1
+            if any(value == inf for value in self.gmag_star_data[selectt[i]]):
+                continue
+            oc = oc - 1
+            prob = f.isochrone(self.gmag_star_data[selectt[i]], self.rmag_star_data[selectt[i]],
+                               self.NewIsoG, self.NewIsoR, self.NewIsog, self.NewIsor)
+            PCMavs = f.PCMD_av(self.gmag_star_data[selectt[i]] - self.rmag_star_data[selectt[i]],
+                               self.rmag_star_data[selectt[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
+                               self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
+                               self.NewIsor[prob])
+            fieldprobs = f.PCMD_av(self.gmag_star_data[dselectt[i]] - self.rmag_star_data[dselectt[i]],
+                                   self.rmag_star_data[dselectt[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
+                                   self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
+                                   self.NewIsor[prob])
+            Death = PCMavs/fieldprobs
+            Sels = (Death>1.4)
+            oc+=1
+            if Sels == False:
+                continue
+            oc = oc - 1
+            x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, self.gmag_star_data[selectt[i]],
+                                                                                   self.rmag_star_data[selectt[i]],
+                                                                                   self.NewIsor, self.NewIsog, self.NewIsoR, 
+                                                                                   self.NewIsoG)
+            oc+=1
+            if np.count_nonzero(inside)<10:
+                continue
+            if np.count_nonzero(insidem)<1:
+                continue
+            oc = oc - 1
+            f.cmd_plot(fig,axs,i-oc,iso3_df['color_G_R'], iso4_df['color_g_r'], 
+                       iso3_df['mag_R'], iso4_df['mag_r'], x, y, loop4_df['color4_loop'], 
+                       loop4_df['mag4_loop'], loop3_df['color3_loop'], loop3_df['mag3_loop'], 
+                       p, self.gmag_star_data[dselectt[i]], self.rmag_star_data[dselectt[i]], str(Object), i, oc)
+            print('Object',  str(Object), '(T) : Ratio =', Death, 'z =', self.isochrone_labels[prob])
+            print('Coordinates:', c_Obt[i])
+            COORDINATET.append(c_Obt[i])
+            Object = Object + 1
+        #plt.tight_layout()
+        self.COORDINATET = COORDINATET
+        final_rows = m.ceil((len(c_Obt)-oc) / Cols)
+        final_plots = len(c_Obt)-oc
+        if final_rows == 1:
+            fig.set_figheight(10)
+        else:
+            fig.set_figheight(40*final_rows)
+        if final_plots > 5:
+            fig.set_figwidth(30)
+        else:
+            fig.set_figwidth(30 - (3*(5-final_plots)))
+        plt.ylim(20,26)
+        fig.gca().invert_yaxis() 
+        for i in range(oc+((Cols*Rowt)-len(c_Obt))):
+            fig.delaxes(axs[(Cols*(m.ceil(len(c_Obt)/Cols))-1)-i]) 
+        plt.show()    
+        
+    def Matching_Coords(self):
+        f.match_coordsg(self.COORDINATES, self.COORDINATEG)    
+        f.match_coordssg(self.COORDINATES, self.COORDINATESG)
+        f.match_coordgsg(self.COORDINATEG, self.COORDINATESG)
+        f.match_coordst(self.COORDINATES, self.COORDINATET)
+        f.match_coordgt(self.COORDINATEG, self.COORDINATET)
+        f.match_coordsgt(self.COORDINATESG, self.COORDINATET)
+        
+    def Coordinate(self):
+        self.ra_cmd, self.dec_cmd = input("RA:"), input("dec:")
+        #self.dec_cmd = input("dec:")
+        
+
+    def MCMC(self):
+        Candidate_Coords = SkyCoord(self.ra_cmd, self.dec_cmd, frame = 'icrs', unit=(u.deg,u.deg))
+        racr = Candidate_Coords.ra.radian
+        deccr = Candidate_Coords.dec.radian
+        self.c_immap = SkyCoord(self.ra_star_data, self.dec_star_data, frame = 'icrs', unit = (u.deg, u.deg))
+        self.rar = self.c_immap.ra.radian
+        self.decr = self.c_immap.dec.radian
+        #deproject coordinates and convert to arcmin
+        xsep = (self.rar - racr) * np.cos(deccr) * ((180. * 60.) /np.pi)
+        ysep = (self.decr - deccr) * ((180. * 60.) /np.pi)
+        dist = np.sqrt(xsep ** 2 + ysep ** 2)
+        # data limits (colour cuts, radial cuts) for feeding into MCMC
+        mag_lim = 26 # approx completeness limit in r
+        col_lim_up = 2
+        col_lim_dn = -0.5
+        dist_lim = 2.5
+        # enter priors for x and y
+        prior = [np.min(self.rar), np.max(self.rar), np.min(self.decr), np.max(self.decr),4]
+        distance=self.c_immap.separation(Candidate_Coords)
+        five_radius = 0.016667*5
+        self.five_arcmin = distance.degree < five_radius
+        
+        cc = self.five_arcmin & (dist<dist_lim)  & (self.rmag_star_data < mag_lim) & (col_lim_dn<self.gmag_star_data - self.rmag_star_data) & (self.gmag_star_data - self.rmag_star_data< col_lim_up)
+        #Initial guesses for the MCMC routine
+        x0i = racr #the by eye ra coord for centre defined above
+        y0i = deccr #the by eye dec coord for centre defined above
+        #edit these to suit your data:
+        ei = 0.2   #the ellipticity between 0-1 (i.e. is it roughly circular - lower values, very elliptical - higher values)
+        rhi = 1  #the half-light radius, roughly by eye in arc min 
+        ti =  0.5 #the postion angle - eh, put anything roughly sensible - I often go with 0.1 (in rad)
+        ni = 15  #the approx number of stars that are dwarf galaxy 
+        #===================================================================
+        #MCMC
+        #=================================================================== 
+        initial=np.array([x0i, y0i, rhi, ei, ti, ni]) #feeds in initial guesses
+        ndim, nwalkers = len(initial), 100 #sets number of dimensions (6 becuase we want to know six params) and number of walkers 
+        pos = [np.array(initial) + 1e-4*np.random.randn(ndim) for i in range(nwalkers)] #sets initial postions for the 100 walkers
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, msp.lnp, args=(prior, self.rar[cc], self.decr[cc]))  #feed in the data (ra and dec in rad)
+        print('Running Burn-In...')
+        burn = sampler.run_mcmc(pos, 2000, progress = True)
+        sampler.reset()
+        print('Running MCMC...')
+        sampler.run_mcmc(burn, 1500, progress = True) #runs the analysis 10,000 times
+        samples = sampler.get_chain(discard=100, thin=15, flat=True)#.reshape((-1,ndim))
+        #This converts the results into nice people friendly units e.g. rad -> deg
+        x_deg = ((samples[:, 0] * u.rad)).to(u.deg).value
+        y_deg = ((samples[:, 1] * u.rad)).to(u.deg).value
+        rh_arcmin = samples[:, 2]
+        e = samples[:, 3]
+        t_deg = ((samples[:, 4] * u.rad)).to(u.deg).value
+        n = samples[:, 5]
+        #Visualising Walkers
+        fig, axes = plt.subplots(ndim, figsize = (9, 8), sharex=True)
+        Labels= [r"RA [$^\circ$]", r"dec [$^\circ$]", r"$r_h [^\prime]$", r"$\epsilon$",r"$\theta[^\circ$]",r"$N_*$"]
+        for i in range(ndim):
+            ax = axes[i]
+            ax.plot(samples[:,i], 'k', alpha = 0.5)
+            ax.set_xlim(0, len(samples))
+            ax.set_ylabel(Labels[i])
+            ax.yaxis.set_label_coords(-0.1,0.5)
+        np.set_printoptions(suppress=True,
+                            formatter={'float_kind':'{:0.2f}'.format})
+        data = np.array([x_deg, y_deg, rh_arcmin, e, t_deg, n]).T
+        self.x0m33, self.y0m33, self.rhm33, self.em33, self.tm33, self.nm33 = map(lambda b: (b[1], b[2]-b[1], b[1]-b[0]), zip(*np.percentile(data, [16, 50, 84],axis=0)))
+        np.set_printoptions(suppress = True)
+        #change the number of sf from info above for the values and uncertainites
+        xmu = "{:.4f}".format(self.x0m33[0])
+        xsigp = "{:.4f}".format(self.x0m33[1])
+        xsign = "{:.4f}".format(self.x0m33[2])
+        ymu = "{:.3f}".format(self.y0m33[0])
+        ysigp = "{:1.3f}".format(self.y0m33[1])
+        ysign = "{:1.3f}".format(self.y0m33[2])
+        rhmu = "{:.2f}".format(self.rhm33[0])
+        rhsigp = "{:.2f}".format(self.rhm33[1])
+        rhsign = "{:.2f}".format(self.rhm33[2])
+        emu = "{:.2f}".format(self.em33[0])
+        esigp = "+{:.2f}".format(self.em33[1])
+        esign = "-{:.2f}".format(self.em33[2])
+        tmu = "{:.0f}".format(self.tm33[0])
+        tsigp = "{:.0f}".format(self.tm33[1])
+        tsign = "{:.0f}".format(self.tm33[2])
+        nmu = "{:.0f}".format(self.nm33[0])
+        nsigp = "{:.0f}".format(self.nm33[1])
+        nsign = "{:.0f}".format(self.nm33[2])
+        
+        HAIL = Candidate_Coords.ra.deg
+        SATAN = Candidate_Coords.dec.deg
+        ONA = ti*(180/np.pi)
+        initials = [HAIL, SATAN, rhi, ei, ONA, ni]
+        #This bit makes the titles for each value 
+        #use r'$^{{+{:.xf}}}_{{-{:.xf}}}$'.format(param[1], param[2]) format for uneven errors
+        #use r"$\pm$" + param_sigp for even errors
+        title1 = r"$x_{0}$[$^\circ$] = " + xmu + r"$\pm$" + xsigp
+        title2 = r"$y_{0}[^\circ$] = " + ymu + r"$\pm$" + ysigp
+        title3 = r"$r_{h}$['] = " + rhmu + r'$^{{+{:.1f}}}_{{-{:.1f}}}$'.format(self.rhm33[1], self.rhm33[2])
+        title4 = r"$\epsilon$ = " + emu + r"$\pm$" + esigp
+        title5 = r"\theta [$^\circ$]= " + tmu + r'$^{{+{:.0f}}}_{{-{:.0f}}}$'.format(self.tm33[1], self.tm33[2])
+        title6 = r"$N*$ = " + nmu + r'$^{{+{:.0f}}}_{{-{:.0f}}}$'.format(self.nm33[1], self.nm33[2])
+        #this part makes the corner plot
+        figure = corner.corner(data, labels= [r"RA [$^\circ$]", r"dec [$^\circ$]", r"$r_h [^\prime]$", r"$\epsilon$",r"$\theta[^\circ$]",r"$N_*$"],
+                               quantiles=[0.16, 0.5, 0.84], truths = initials, show_titles=True, title_kwargs={"fontsize": 16}, title_fmt=".3f",
+                               label_kwargs={"fontsize": 18}, useOffset=False,  labelpad = 0.1)
+        
+        axes = np.array(figure.axes).reshape((ndim, ndim))
+        from matplotlib.ticker import FormatStrFormatter
+        
+        for i in range(ndim):
+            ax = axes[i, i]
+            print(ax.title)
+            
+        axes[5,1].xaxis.set_major_formatter(FormatStrFormatter('%.3f'))
+        plt.show()  
+            ## Creating new centre profile for overdensity
+        self.Candidate_Coords = SkyCoord(self.x0m33[0], self.y0m33[0], frame = 'icrs', unit=(u.deg, u.deg))
+
+    def Candidate_CMD(self):
+        fig, axs = plt.subplots(1, 2,sharey=True)
+        distance = self.c_immap.separation(self.Candidate_Coords)
+        select = distance.degree < self.radius
+        dselect = (distance.degree < self.radiusout) & (distance.degree > self.radiusin)
+        prob = f.isochrone(self.gmag_star_data[select],self.rmag_star_data[select],self.NewIsoG,self.NewIsoR,self.NewIsog,self.NewIsor)
+        PCMavs = f.PCMD_av(self.gmag_star_data[select] - self.rmag_star_data[select],self.rmag_star_data[select], (self.NewIsoG[prob]- self.NewIsoR[prob]), (self.NewIsoR[prob]),(self.NewIsog[prob]- self.NewIsor[prob]),(self.NewIsor[prob]))
+        fieldprob = f.PCMD_av(self.gmag_star_data[dselect] - self.rmag_star_data[dselect],self.rmag_star_data[dselect], (self.NewIsoG[prob] - self.NewIsoR[prob]), (self.NewIsoR[prob]),(self.NewIsog[prob] - self.NewIsor[prob]),(self.NewIsor[prob]))
+        ###PLOT AROUND CHOSEN SPACE
+        x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, self.gmag_star_data[select], self.rmag_star_data[select], self.NewIsor, self.NewIsog, self.NewIsoR, self.NewIsoG)
+        #plotting desired Isochrone
+        axs[0].plot(iso4_df['color_g_r'], iso4_df['mag_r'], c = '0.5')
+        axs[0].plot(iso3_df['color_G_R'], iso3_df['mag_R'], c = '0.5')
+        axs[1].plot(iso4_df['color_g_r'], iso4_df['mag_r'], c = '0.5')
+        axs[1].plot(iso3_df['color_G_R'], iso3_df['mag_R'], c = '0.5')
+        #plotting CM cuts
+        axs[0].plot(loop4_df['color4_loop'],loop4_df['mag4_loop'])
+        axs[0].plot(loop3_df['color3_loop'],loop3_df['mag3_loop'])
+        #background stars
+        axs[0].scatter(self.gmag_star_data-self.rmag_star_data,self.rmag_star_data,color = 'grey', alpha = 0.2, s = 10)
+        #Plotting the stars more relatable to dwarf
+        cs = axs[0].scatter(x, y, marker = 'o', c=p, cmap = 'plasma')
+        cbar = plt.colorbar(cs,  label = 'Membership Probability')#, ax=axs[0])
+        #Field population
+        axs[1].scatter(self.gmag_star_data[dselect] - self.rmag_star_data[dselect], self.rmag_star_data[dselect], color = 'black', alpha = 0.5)
+        #axis
+        axs[0].set_xlim(-0.5,2.5)
+        axs[0].set_ylim(20,26)
+        axs[1].set_xlim(-0.5,2.5)
+        axs[1].set_ylim(20,26)
+        axs[0].set_title('CMD \n ra = '+ str(round(self.x0m33[0],3)) +'\n dec = '+ str(round(self.y0m33[0],3)))
+        axs[0].set_xlabel('g-r (mag)')
+        axs[0].set_ylabel('r (mag)')
+        axs[1].set_title('Field')
+        axs[1].set_xlabel('g-r (mag)')
+        plt.gca().invert_yaxis()
+        plt.subplots_adjust(wspace=0)
+        #plt.tight_layout()
+        print('The Coordinates of the Candidate is:', self.x0m33[0], self.y0m33[0])
+        print('The ratio of a star being a memeber of a dwarf galaxy compare to the field population is', PCMavs/fieldprob)
+        print('The isochrone used has a metallicity of:', self.isochrone_labels[prob])
+
+    def Radial_Proflie(self):
+        #===================================================================
+        #RADIAL PROFILE (EXP)
+        #===================================================================
+        fig, ax = plt.subplots(1, 2, figsize = (11,4))
+        d2r = np.pi/180 #degrees to radians
+        NN = 1/(1-self.em33[0])
+        r1 = (NN*((self.rar[self.five_arcmin] - self.x0m33[0]*d2r)*np.cos(self.y0m33[0]*d2r) * np.cos(self.tm33[0]*d2r) - (self.decr[self.five_arcmin] - self.y0m33[0]*d2r) * np.sin(self.tm33[0]*d2r)))**2
+        r2 = ((self.rar[self.five_arcmin] - self.x0m33[0]*d2r) *np.cos(self.y0m33[0]*d2r) * np.sin(self.tm33[0]*d2r) + (self.decr[self.five_arcmin]- self.y0m33[0]*d2r) * np.cos(self.tm33[0]*d2r)) ** 2
+        #times by cos(dec) because deprojection
+        rrgb = np.sqrt(r1 + r2)  * 180. / np.pi * 60
+        bins = np.arange(0,5,0.1)
+        num = np.histogram(rrgb, bins = bins)
+        area = num[1] ** 2 * np.pi  #(pi r^2)
+        carea = np.zeros(len(num[0])) 
+        for i in range(len(area) - 1):
+            carea[i] = area[i+1] - area[i]    
+            avrgb = num[0] / carea
+        a_start_bin = 1  # Define the bin where the integration for the dwarf profile starts
+        a_end_bin = 8  # Define the bin where the integration for the dwarf profile ends
+        # Calculate the integral of the dwarf profile over the area a
+        integral_dwarf_density = np.sum(avrgb[a_start_bin:a_end_bin] * carea[a_start_bin:a_end_bin])
+        # Calculate the total area (A)
+        total_area = np.sum(carea)
+        # Calculate the background (sigma_b)
+        n = self.nm33[0]+self.nm33[1]
+        background = ((self.nm33[0]+self.nm33[1]) - integral_dwarf_density) / total_area
+        
+        ax[0].set_xlim(0.05, 2)
+        ax[0].set_xlabel("Radius (arcmin)",)
+        ax[0].set_ylabel(r"N$_*$/arcmin$^2$")
+        ax[0].set_title('RGB radial profile \n ra = '+ str(round(self.x0m33[0],3))+ ' dec = '+ str(round(self.y0m33[0],3)))
+        
+        x = np.arange(0, 4.9, 0.1)
+        ax[0].errorbar(x, avrgb, yerr = np.sqrt(avrgb),fmt = 'o', markersize = 10, c = 'k')
+        xax = np.arange(0.05, 5, 0.01)
+        yp = (1.68 **2 / (2 * np.pi * self.rhm33[0] **2 * (1 - self.em33[0]))) * (self.nm33[0]+self.nm33[1]) * np.exp(-1.68 * xax / self.rhm33[0]) + background
+        ax[0].plot(xax, yp, c = 'k')
+        
+        #===================================================================
+        #RADIAL PROFILE (LOG-LIN)
+        #===================================================================
+        distances = []
+        Distances = self.c_immap.separation(self.Candidate_Coords)
+        distances.append(Distances)
+        bins = 10
+        Nums, radiuss = np.histogram(distances, bins = bins, range = (0,0.01667))  #creating hist data and width of bins
+        radiuss = radiuss[1:]#.deg #reshaping binsg so match length of hist
+        areas = []   #empty lists for the next loop   
+        for j in range(bins):
+            areas.append(np.pi*radiuss[j]**2 )   #area of annulus of different 
+        Number_density = []
+        for k in range(len(areas)):
+            if k == 0:
+                Number_density.append(Nums[k]/(areas[k]))
+            else:
+                Number_density.append(Nums[k]/(areas[k]-areas[k-1]))    
+        ax[1].scatter(radiuss,Number_density)            #creating scatter
+        ax[1].set_xlabel('Radius (deg)')
+        ax[1].set_yscale('log')
+        ax[1].set_ylim(1e3,5e5)
+        #LINEAR REGRESSION STUFF
+        Xs = radiuss             #x 
+        Ys = np.log10(Number_density)   #loging y
+        yes = np.isfinite(Ys)  #selection thing
+        Xs = Xs[yes]
+        Ys = Ys[yes]
+        Xs = Xs.reshape(-1,1)    #reshaping for later
+        Ys = Ys.reshape(-1,1)
+        Models = LinearRegression()
+        Models.fit(Xs, Ys)       #creating linear regression model
+        Xs_plot_vals = np.arange(0,100)   #creating Xs valyes to plot    
+        Ys_pred = Models.predict(Xs_plot_vals.reshape(-1,1))   #predicitng corresponding y values
+        Ys_pred_log = 10**Ys_pred                 #un log those y valyes
+        s_df = pd.DataFrame({'Radius': Xs_plot_vals, '$\Sigma$':Ys_pred_log.flatten()}) #creating data frame for ez plot
+        ax[1].plot(s_df['Radius'], s_df['$\Sigma$'], c = 'k')
+        ax[1].set_xlim(0,0.02)
+        ax[1].set_title('Log-Linear Radial Profile \n ra = '+ str(round(self.x0m33[0],3))+ ' dec = '+ str(round(self.y0m33[0],3)))
+        r = np.sqrt(Models.score(Xs, Ys))
+        Int = Models.intercept_
+        print('r coefficient =' , r, 'and Intercept', Int)
+
+    def location_on_sig_map(self):
+        fig, ax = plt.subplots(2, 2, figsize = (11,9))  #creating a figure with 2 subplots
+        axis_0 = ax[0,0].imshow(self.significance_maps.T, origin='lower',                 #star map
+                                extent=[self.xbins[0], self.xbins[-1], self.ybins[0], self.ybins[-1]], label = 'Map',
+                                cmap='plasma', interpolation='gaussian',
+                                aspect='auto')
+        fig.colorbar(axis_0, ax=ax[0,0])      #colourbar 
+        xs,ys=np.where(self.significance_maps>3)    
+        ax[0,0].scatter(self.xbins[self.xs]+self.size/2,self.ybins[self.ys]+self.size/2,marker='o',s=3,edgecolors = 'w')
+        ax[0,0].set_title('Source: Stars', fontsize = 10)
+        ax[0,0].set_xlabel('Right Ascension (deg)', fontsize = 10)
+        ax[0,0].set_ylabel('Declination (deg)', fontsize = 10)
+        #===================================================================
+        #GALAXY MAP
+        #===================================================================
+        axis_00 = ax[0,1].imshow(self.significance_mapg.T, origin='lower',                 #star map
+                                 extent=[self.xbins[0], self.xbing[-1], self.ybing[0], self.ybing[-1]], label = 'Map',
+                                 cmap='plasma', interpolation='gaussian',
+                                 aspect='auto')
+        fig.colorbar(axis_00, ax=ax[0,1])      #colourbar 
+        xg,yg=np.where(self.significance_mapg>3)    
+        ax[0,1].scatter(self.xbing[self.xg]+self.size/2,self.ybing[self.yg]+self.size/2,marker='o',s=3,edgecolors = 'w')
+        ax[0,1].set_title('Source: Galaxies', fontsize = 10)
+        ax[0,1].set_xlabel('Right Ascension (deg)', fontsize = 10)
+        ax[0,1].set_ylabel('Declination (deg)', fontsize = 10)
+        #===================================================================
+        #STAR AND GALAXY MAP
+        #===================================================================
+        axis_1 = ax[1,0].imshow(self.significance_mapsg.T, origin='lower',
+                                extent=[self.xbinsg[0], self.xbinsg[-1], self.ybinsg[0], self.ybinsg[-1]], label = 'Map',
+                                cmap='plasma', interpolation='gaussian',
+                                aspect='auto')
+        fig.colorbar(axis_1, ax=ax[1,0])
+        xsg,ysg=np.where(self.significance_mapsg>3)
+        ax[1,0].scatter(self.xbinsg[self.xsg]+self.size/2,self.ybinsg[self.ysg]+self.size/2,marker='o',s=3,edgecolors = 'w')
+        ax[1,0].set_title('Source: Stars and Galaxies', fontsize = 10)
+        ax[1,0].set_xlabel('Right Ascension (deg)', fontsize = 10)
+        ax[1,0].set_ylabel('Declination (deg)', fontsize = 10)
+        
+        #===================================================================
+        # Image from telescope
+        #===================================================================
+        # Load the image using OpenCV
+        
+        axis_3 = ax[1,1].imshow(self.IPB_masked.T, origin='lower', label='Map', extent=[self.xbinsg[0], self.xbinsg[-1], self.ybinsg[0], self.ybinsg[-1]],
+                                cmap='plasma', interpolation='gaussian', aspect='auto')
+        fig.colorbar(axis_3, ax=ax[1,1])
+        # Scatter plot significant coordinates on top of the telescope image map
+        ax[1,1].scatter(self.significant_coords_RA, self.significant_coords_Dec, marker='o', s=3, c='w')
+        ax[1,1].scatter(self.cluster_centers[:,0],self.cluster_centers[:,1], marker='*', c='y', s=10)
+        ax[1,1].set_title('Telescope Map', fontsize = 10)
+        ax[1,1].set_xlabel('Right Ascension (deg)', fontsize = 10)
+        ax[1,1].set_ylabel('Declination (deg)', fontsize = 10)
+        #MARKERS
+        ax[0,0].scatter(self.Candidate_Coords.ra.deg, self.Candidate_Coords.dec.deg, s=80, facecolors='none', edgecolors='r')
+        ax[0,1].scatter(self.Candidate_Coords.ra.deg, self.Candidate_Coords.dec.deg, s=80, facecolors='none', edgecolors='r')
+        ax[1,0].scatter(self.Candidate_Coords.ra.deg, self.Candidate_Coords.dec.deg, s=80, facecolors='none', edgecolors='r')
+        ax[1,1].scatter(self.Candidate_Coords.ra.deg, self.Candidate_Coords.dec.deg, s=80, facecolors='none', edgecolors='r')
+        
+    def Pandas(self):
+        Map, xBin, yBin = np.histogram2d(self.ra_data, self.dec_data,
+                                                 bins=(np.arange(np.min(self.ra_data), np.max(self.ra_data), self.size),
+                                                       np.arange(np.min(self.dec_data), np.max(self.dec_data), self.size)),
+                                                 )
+        # Create a significance map for galaxies
+        self.significance_map = (Map - np.mean(Map)) / np.std(Map)
+        
+        ###Radius 3 arcminute from Objects
+        three_arcminutes = 0.016667 * 3
+    
+        x_min_zoom = self.Candidate_Coords.ra.deg - three_arcminutes
+        x_max_zoom = self.Candidate_Coords.ra.deg + three_arcminutes
+        y_min_zoom = self.Candidate_Coords.dec.deg - three_arcminutes
+        y_max_zoom = self.Candidate_Coords.dec.deg + three_arcminutes
+    
+        # Optionally, you can plot the galaxy map
+        fig4, ax = plt.subplots(1, 2, figsize = (11,4))
+        AXIS = ax[0].imshow(self.significance_map.T, origin='lower',
+                   extent=[xBin[0], xBin[-1], yBin[0], yBin[-1]],
+                   cmap='plasma', interpolation='gaussian',
+                   aspect='auto')
+        fig4.colorbar(AXIS, ax = ax[0])
+        ax[0].set_title('Zoomed: Star and Galaxy')
+        ax[0].set_xlabel('Right Ascension (deg)')
+        ax[0].set_ylabel('Declination (deg)')
+        #plt.figure(figsize=(10, 10))
+        ax[0].set_xlim(x_min_zoom, x_max_zoom)
+        ax[0].set_ylim(y_min_zoom, y_max_zoom)
+
+
+        #===================================================================
+        #PAndAS FOOTPRINT
+        #===================================================================
+        c_m33 = get_icrs_coordinates("M33")
+        c_m31 = get_icrs_coordinates("M31")
+        c_p1 = get_icrs_coordinates("Pisces I")
+        c_a22 = get_icrs_coordinates("Andromeda XXII")
+        c_a16= get_icrs_coordinates("Andromeda XVI")
+        c_a11= get_icrs_coordinates("Andromeda XI")
+        c_a12= get_icrs_coordinates("Andromeda XII")
+        c_a13= get_icrs_coordinates("Andromeda XIII")
+        c_a14= get_icrs_coordinates("Andromeda XIV")
+        c_a2= get_icrs_coordinates("Andromeda II")
+        c_a19= get_icrs_coordinates("Andromeda XIX")
+        
+        
+        # Read the field positions from NM file
+        r = np.genfromtxt('corners_PAndAS11.txt', dtype=None,
+                          names='RA,Dec',
+                          usecols=(0,1))
+        #fig=plt.figure(figsize=(6,6))
+        #ax=fig.add_axes([left,b1,width,height])
+        
+        circle1 = plt.Circle((c_m33.ra.deg, c_m33.dec.deg), 10, facecolor='None', edgecolor='0.5', ls='--')
+        lin=plt.plot(r['RA'],r['Dec'],color='k',label='PAndAS')
+        #ax.set_xlim(ax.get_xlim()[::-1])
+        ax[1].set_xlim(30,5)
+        ax[1].set_ylim(21,34)
+        ax[1].set_xlabel('RA (deg)')
+        ax[1].set_ylabel('Dec (deg)')
+        
+        # Pisc VII
+        ra1, dec1 = 20.419, 26.391 # P7
+        #Overdensity
+        ra2, dec2 = self.x0m33[0], self.y0m33[0]
+        
+        ax[1].add_patch(circle1)
+        
+        ax[1].scatter([ra1],[dec1], marker = '*', s = 300, c = 'mediumpurple', edgecolor='k')
+        ax[1].scatter([ra2],[dec2], marker = '*', s = 500, c = 'rebeccapurple', edgecolor='k')
+        ax[1].scatter(c_m33.ra.deg, c_m33.dec.deg, marker = 'o', s = 100, c = 'k')
+        ax[1].scatter(c_a22.ra.deg, c_a22.dec.deg, marker = '*', s = 300, c = 'mediumpurple',edgecolor='k',zorder=100)
+        ax[1].scatter(c_a16.ra.deg, c_a16.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax[1].scatter(c_a11.ra.deg, c_a11.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax[1].scatter(c_a12.ra.deg, c_a12.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax[1].scatter(c_a13.ra.deg, c_a13.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax[1].scatter(c_a14.ra.deg, c_a14.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax[1].scatter(c_a2.ra.deg, c_a2.dec.deg, marker = '*', s = 200, c = 'mediumpurple',edgecolor='k')
+        ax[1].scatter(c_p1.ra.deg, c_p1.dec.deg, marker = '*', s = 200, c = 'mediumpurple',edgecolor='k')
+        ax[1].set_title('Location of Candidate around M33')
+        ax[1].text(ra2 - 0.5, dec2 + 0.25 , "Cand", fontsize =12)
+        ax[1].text(25,31, "M33" ,fontsize = 12)
+        ax[1].text(21,28., "And XXII/Tri I", fontsize = 12)
+        ax[1].text(19.5,26.2, "Pisces VII/Tri III", fontsize = 12)
+        ax[1].text(15,22.2, "Pisces I", fontsize = 12)
+        ax[1].text(25,32, "PAndAS footprint", c = '0.5')
+
+if __name__ == "__main__":
+    mpl.rcParams['axes.formatter.useoffset'] = False
+    np.set_printoptions(suppress=True)
+
+    # Initialize the DataAnalysis class with RA and DEC values
+    DataAnalysis = DataAnalysis(ra_file=16.0, dec_file=22.0)   # input chosen ra and dec file here
+    # Load and process su15,rvey data first
+    DataAnalysis.load_and_process_survey_data()
+    # Perform the data analysis steps
+    DataAnalysis.load_isochrone_data()
+    DataAnalysis.load_and_process_telescope_image()
+    DataAnalysis.create_star_map()
+    DataAnalysis.create_galaxy_map()
+    DataAnalysis.create_star_and_galaxy_map()
+    DataAnalysis.create_significance_map()
+    DataAnalysis.perform_cluster_analysis()
+    DataAnalysis.Silhouette_graph()
+    DataAnalysis.Calinski_Harabasz_graph()
+    DataAnalysis.Davies_Bouldin_graph()
+    DataAnalysis.Elbow_point_graph()
+    DataAnalysis.CMD_star()
+    DataAnalysis.CMD_galaxy()
+    DataAnalysis.CMD_star_and_galaxy()
+    DataAnalysis.CMD_telescope()
+    DataAnalysis.Matching_Coords()
+    num_iterations = int(input("Enter the number of times to repeat the analysis: "))
+    for i in range(num_iterations):
+        DataAnalysis.Coordinate()
+        DataAnalysis.MCMC()
+        DataAnalysis.Candidate_CMD()
+        DataAnalysis.Radial_Proflie()
+        DataAnalysis.location_on_sig_map()
+        DataAnalysis.Pandas()
