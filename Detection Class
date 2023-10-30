@@ -808,10 +808,10 @@ class DataAnalysis():
         nsigp = "{:.0f}".format(self.nm33[1])
         nsign = "{:.0f}".format(self.nm33[2])
         
-        HAIL = Candidate_Coords.ra.deg
-        SATAN = Candidate_Coords.dec.deg
+        CAND_ra = Candidate_Coords.ra.deg
+        CAND_dec = Candidate_Coords.dec.deg
         ONA = ti*(180/np.pi)
-        initials = [HAIL, SATAN, rhi, ei, ONA, ni]
+        initials = [CAND_ra, CAND_DEC, rhi, ei, ONA, ni]
         #This bit makes the titles for each value 
         #use r'$^{{+{:.xf}}}_{{-{:.xf}}}$'.format(param[1], param[2]) format for uneven errors
         #use r"$\pm$" + param_sigp for even errors
