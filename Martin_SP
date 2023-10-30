@@ -2,10 +2,9 @@ import numpy as np
 from scipy import integrate as ingt
 
 """
-This quirky little sausage is just an implementation of Martin et al 2016's MCMC
-dwarf galaxy structural parameter algorithm. It takes ra and dec for stars and 
-determines the centroid, half light radius, position angle and ellipticity.It also
-takes user defined priors etc.
+This is an implementation of Martin et al 2016's MCMC dwarf galaxy structural parameter algorithm.
+It takes ra and dec for stars and determines the centroid, half light radius, position angle and 
+ellipticity.It also takes user defined priors etc.
 """
 
 def lphot(params, x, y):
