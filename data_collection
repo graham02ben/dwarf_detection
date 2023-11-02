@@ -11,6 +11,7 @@ base_dir = "C:\\Users\\bboyg\\Downloads\\"
 ra_step = 0.5
 dec_step = 0.5
 
+#Input RA and Dec ranges. This example goes between RA 27.0-30.0, dec 30.0-34.0, in steps of 0.5deg
 for ra in range(270, 301, int(ra_step * 10)):  # RA values from 15.0 to 30.0 with increments of 0.5
     for dec in range(300, 341, int(dec_step * 10)):  # DEC values from 22.0 to 30.0 with increments of 0.5
         ra_value = ra / 10.0
