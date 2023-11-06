@@ -5,3 +5,5 @@ The code will produce CMDs for all overdensities which match a certain criteria
 By inputting coordinates of chosen overdensity, one can run a MCMC to retrieve data from the overdensity.
 
 Code outputs: CMD comapred to a field, radial profile, MCMC corner plot, location of local area and zoomed in density map.
+
+Documentation of each file shall be completed when possible
