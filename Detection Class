@@ -222,6 +222,17 @@ class DataAnalysis():
         self.telescope_image = img
 
     def create_star_map(self):
+        """
+        This creates a number map of the data inputted. It bins stellar sources with
+        a pixel size of 0.01 deg. This can be adjusted in '__init__'. Using equation
+        from Walsh 09, can create a significance map and areas that have a sigma > 3
+        compared to the back ground is highlighted.
+
+        Returns
+        -------
+        xs, ys
+
+        """
         # Assuming self.telescope_image is already processed
         # Define parameters for creating the star map
         significance_threshold = 3.0 # Threshold for significance
@@ -257,6 +268,15 @@ class DataAnalysis():
         plt.show()
 
     def create_galaxy_map(self):
+        """
+        The same as above, but now uses only the galactic sources within the 
+        data
+
+        Returns
+        -------
+        xg, yg
+
+        """
         # Define parameters for creating the galaxy map
         significance_threshold = 3.0  # Threshold for significance
 
@@ -278,7 +298,7 @@ class DataAnalysis():
         self.xg = xg
         self.yg = yg
 
-        # Optionally, you can plot the galaxy map
+        # You can plot the galaxy map
         plt.imshow(self.significance_mapg.T, origin='lower',
                    extent=[xbing[0], xbing[-1], ybing[0], ybing[-1]],
                    cmap='plasma', interpolation='gaussian',
@@ -292,10 +312,19 @@ class DataAnalysis():
         plt.show()
         
     def create_star_and_galaxy_map(self):
-        # Define parameters for creating the galaxy map
+        """
+        The same as above, but now uses both stellar and galactic sources
+        within the data
+
+        Returns
+        -------
+        xsg, ysg
+
+        """
+        # Define parameters for creating the star and galaxy map
         significance_threshold = 3.0 # Threshold for significance
 
-        # Create a 2D histogram of the telescope image for galaxies
+        # Create a 2D histogram of the telescope image for stars and galaxies
         immapsg, xbinsg, ybinsg = np.histogram2d(
             self.ra_data, self.dec_data,
             bins=(np.arange(np.min(self.ra_data), np.max(self.ra_data), self.size),
@@ -303,17 +332,17 @@ class DataAnalysis():
         )
         self.xbinsg = xbinsg
         self.ybinsg = ybinsg
-        # Create a significance map for galaxies
+        # Create a significance map for stars and galaxies
         self.significance_mapsg = (immapsg - np.mean(immapsg)) / np.std(immapsg)
 
-        # Create a galaxy map by applying a significance threshold
+        # Create a star and galaxy map by applying a significance threshold
         xsg, ysg = np.where(self.significance_mapsg > significance_threshold)
 
-        # Store the galaxy map
+        # Store the star and galaxy map
         self.xsg = xsg
         self.ysg = ysg
 
-        # Optionally, you can plot the galaxy map
+        # Plot the star and galaxy map
         plt.imshow(self.significance_mapsg.T, origin='lower',
                    extent=[xbinsg[0], xbinsg[-1], ybinsg[0], ybinsg[-1]],
                    cmap='plasma', interpolation='gaussian',
@@ -325,6 +354,7 @@ class DataAnalysis():
         plt.ylabel('Declination (deg)')
         #plt.figure(figsize=(10, 10))
         plt.show()
+
     def create_significance_map(self):
         IPB = (self.telescope_image - np.mean(self.telescope_image)) / np.std(self.telescope_image)
         height, width = self.telescope_image.shape[:2] # Get the shape of the image
