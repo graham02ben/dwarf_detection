@@ -22,6 +22,13 @@ import corner
 import martin_sp as msp
 import pandas as pd
 from sklearn.linear_model import LinearRegression
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+import time
+import pyautogui
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -99,6 +106,11 @@ class DataAnalysis():
         self.COORDINATESG = None
         self.COORDINATET = None
         
+        self.fig_CMD, self.axs_CMD = None, None
+        self.fig_rad, self.ax_rad = None, None
+        self.fig_map, self.ax_map = None, None
+        self.fig_screenshot, self.ax_screenshot = None, None
+        
     def load_and_process_survey_data(self):
         """
         Takes data from chosen file. It extracts the ra, dec, magnitudes
@@ -138,9 +150,9 @@ class DataAnalysis():
 
     def load_isochrone_data(self):
         """
-        List of isochrones is taken from 'http://stev.oapd.inaf.it/cgi-bin/cmd'. 
-        For UFDs, 12Gyr and metal poor isochrones are used. We load data from each 
-        one used, select chosen labels, and adjust for Distance Modulus.
+        List of isochrones is taken from 'CMD3.7'. For UFDs, 12Gyr and metal
+        poor isochrones are used. We load data from each one used, select 
+        chosen labels, and adjust for Distance Modulus.
 
         Returns
         -------
@@ -161,6 +173,7 @@ class DataAnalysis():
         ###Distance Modulus - Change for distance to galaxy
         d = 800000 #pc
         DM = 5*np.log10(d)-5 
+        print(DM)
         ###Input which Isochrone label want to focus on
         isolabel = 4
         Isolabel = 3
@@ -298,7 +311,7 @@ class DataAnalysis():
         self.xg = xg
         self.yg = yg
 
-        # You can plot the galaxy map
+        # Optionally, you can plot the galaxy map
         plt.imshow(self.significance_mapg.T, origin='lower',
                    extent=[xbing[0], xbing[-1], ybing[0], ybing[-1]],
                    cmap='plasma', interpolation='gaussian',
@@ -354,7 +367,7 @@ class DataAnalysis():
         plt.ylabel('Declination (deg)')
         #plt.figure(figsize=(10, 10))
         plt.show()
-
+        
     def create_significance_map(self):
         IPB = (self.telescope_image - np.mean(self.telescope_image)) / np.std(self.telescope_image)
         height, width = self.telescope_image.shape[:2] # Get the shape of the image
@@ -493,7 +506,7 @@ class DataAnalysis():
         plt.scatter(self.elbow_point, self.wcss[self.elbow_point-2], c='red', marker='x', s=100, label='Elbow Point')
         plt.legend()
         plt.show()
-
+        
 
     def CMD_star(self):
         self.c_immap = SkyCoord(self.ra_star_data, self.dec_star_data, frame = 'icrs', unit=(u.deg, u.deg))
@@ -868,10 +881,10 @@ class DataAnalysis():
         nsigp = "{:.0f}".format(self.nm33[1])
         nsign = "{:.0f}".format(self.nm33[2])
         
-        CAND_ra = Candidate_Coords.ra.deg
-        CAND_dec = Candidate_Coords.dec.deg
+        HAIL = Candidate_Coords.ra.deg
+        SATAN = Candidate_Coords.dec.deg
         ONA = ti*(180/np.pi)
-        initials = [CAND_ra, CAND_DEC, rhi, ei, ONA, ni]
+        initials = [HAIL, SATAN, rhi, ei, ONA, ni]
         #This bit makes the titles for each value 
         #use r'$^{{+{:.xf}}}_{{-{:.xf}}}$'.format(param[1], param[2]) format for uneven errors
         #use r"$\pm$" + param_sigp for even errors
@@ -899,7 +912,7 @@ class DataAnalysis():
         self.Candidate_Coords = SkyCoord(self.x0m33[0], self.y0m33[0], frame = 'icrs', unit=(u.deg, u.deg))
 
     def Candidate_CMD(self):
-        fig, axs = plt.subplots(1, 2,sharey=True)
+        self.fig_CMD, self.axs_CMD = plt.subplots(1, 2,sharey=True)
         distance = self.c_immap.separation(self.Candidate_Coords)
         select = distance.degree < self.radius
         dselect = (distance.degree < self.radiusout) & (distance.degree > self.radiusin)
@@ -909,33 +922,33 @@ class DataAnalysis():
         ###PLOT AROUND CHOSEN SPACE
         x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, self.gmag_star_data[select], self.rmag_star_data[select], self.NewIsor, self.NewIsog, self.NewIsoR, self.NewIsoG)
         #plotting desired Isochrone
-        axs[0].plot(iso4_df['color_g_r'], iso4_df['mag_r'], c = '0.5')
-        axs[0].plot(iso3_df['color_G_R'], iso3_df['mag_R'], c = '0.5')
-        axs[1].plot(iso4_df['color_g_r'], iso4_df['mag_r'], c = '0.5')
-        axs[1].plot(iso3_df['color_G_R'], iso3_df['mag_R'], c = '0.5')
+        self.axs_CMD[0].plot(iso4_df['color_g_r'], iso4_df['mag_r'], c = '0.5')
+        self.axs_CMD[0].plot(iso3_df['color_G_R'], iso3_df['mag_R'], c = '0.5')
+        self.axs_CMD[1].plot(iso4_df['color_g_r'], iso4_df['mag_r'], c = '0.5')
+        self.axs_CMD[1].plot(iso3_df['color_G_R'], iso3_df['mag_R'], c = '0.5')
         #plotting CM cuts
-        axs[0].plot(loop4_df['color4_loop'],loop4_df['mag4_loop'])
-        axs[0].plot(loop3_df['color3_loop'],loop3_df['mag3_loop'])
+        self.axs_CMD[0].plot(loop4_df['color4_loop'],loop4_df['mag4_loop'])
+        self.axs_CMD[0].plot(loop3_df['color3_loop'],loop3_df['mag3_loop'])
         #background stars
-        axs[0].scatter(self.gmag_star_data-self.rmag_star_data,self.rmag_star_data,color = 'grey', alpha = 0.2, s = 10)
+        self.axs_CMD[0].scatter(self.gmag_star_data-self.rmag_star_data,self.rmag_star_data,color = 'grey', alpha = 0.2, s = 10)
         #Plotting the stars more relatable to dwarf
-        cs = axs[0].scatter(x, y, marker = 'o', c=p, cmap = 'plasma')
+        cs = self.axs_CMD[0].scatter(x, y, marker = 'o', c=p, cmap = 'plasma')
         cbar = plt.colorbar(cs,  label = 'Membership Probability')#, ax=axs[0])
         #Field population
-        axs[1].scatter(self.gmag_star_data[dselect] - self.rmag_star_data[dselect], self.rmag_star_data[dselect], color = 'black', alpha = 0.5)
+        self.axs_CMD[1].scatter(self.gmag_star_data[dselect] - self.rmag_star_data[dselect], self.rmag_star_data[dselect], color = 'black', alpha = 0.5)
         #axis
-        axs[0].set_xlim(-0.5,2.5)
-        axs[0].set_ylim(20,26)
-        axs[1].set_xlim(-0.5,2.5)
-        axs[1].set_ylim(20,26)
-        axs[0].set_title('CMD \n ra = '+ str(round(self.x0m33[0],3)) +'\n dec = '+ str(round(self.y0m33[0],3)))
-        axs[0].set_xlabel('g-r (mag)')
-        axs[0].set_ylabel('r (mag)')
-        axs[1].set_title('Field')
-        axs[1].set_xlabel('g-r (mag)')
+        self.axs_CMD[0].set_xlim(-0.5,2.5)
+        self.axs_CMD[0].set_ylim(20,26)
+        self.axs_CMD[1].set_xlim(-0.5,2.5)
+        self.axs_CMD[1].set_ylim(20,26)
+        self.axs_CMD[0].set_title('CMD \n ra = '+ str(round(self.x0m33[0],3)) +'\n dec = '+ str(round(self.y0m33[0],3)))
+        self.axs_CMD[0].set_xlabel('g-r (mag)')
+        self.axs_CMD[0].set_ylabel('r (mag)')
+        self.axs_CMD[1].set_title('Field')
+        self.axs_CMD[1].set_xlabel('g-r (mag)')
         plt.gca().invert_yaxis()
         plt.subplots_adjust(wspace=0)
-        #plt.tight_layout()
+        plt.tight_layout()
         print('The Coordinates of the Candidate is:', self.x0m33[0], self.y0m33[0])
         print('The ratio of a star being a memeber of a dwarf galaxy compare to the field population is', PCMavs/fieldprob)
         print('The isochrone used has a metallicity of:', self.isochrone_labels[prob])
@@ -944,7 +957,7 @@ class DataAnalysis():
         #===================================================================
         #RADIAL PROFILE (EXP)
         #===================================================================
-        fig, ax = plt.subplots(1, 2, figsize = (11,4))
+        self.fig_rad, self.ax_rad = plt.subplots(1, 2, figsize = (11,4))
         d2r = np.pi/180 #degrees to radians
         NN = 1/(1-self.em33[0])
         r1 = (NN*((self.rar[self.five_arcmin] - self.x0m33[0]*d2r)*np.cos(self.y0m33[0]*d2r) * np.cos(self.tm33[0]*d2r) - (self.decr[self.five_arcmin] - self.y0m33[0]*d2r) * np.sin(self.tm33[0]*d2r)))**2
@@ -968,16 +981,16 @@ class DataAnalysis():
         n = self.nm33[0]+self.nm33[1]
         background = ((self.nm33[0]+self.nm33[1]) - integral_dwarf_density) / total_area
         
-        ax[0].set_xlim(0.05, 2)
-        ax[0].set_xlabel("Radius (arcmin)",)
-        ax[0].set_ylabel(r"N$_*$/arcmin$^2$")
-        ax[0].set_title('RGB radial profile \n ra = '+ str(round(self.x0m33[0],3))+ ' dec = '+ str(round(self.y0m33[0],3)))
+        self.ax_rad[0].set_xlim(0.05, 2)
+        self.ax_rad[0].set_xlabel("Radius (arcmin)",)
+        self.ax_rad[0].set_ylabel(r"N$_*$/arcmin$^2$")
+        self.ax_rad[0].set_title('RGB radial profile \n ra = '+ str(round(self.x0m33[0],3))+ ' dec = '+ str(round(self.y0m33[0],3)))
         
         x = np.arange(0, 4.9, 0.1)
-        ax[0].errorbar(x, avrgb, yerr = np.sqrt(avrgb),fmt = 'o', markersize = 10, c = 'k')
+        self.ax_rad[0].errorbar(x, avrgb, yerr = np.sqrt(avrgb),fmt = 'o', markersize = 10, c = 'k')
         xax = np.arange(0.05, 5, 0.01)
         yp = (1.68 **2 / (2 * np.pi * self.rhm33[0] **2 * (1 - self.em33[0]))) * (self.nm33[0]+self.nm33[1]) * np.exp(-1.68 * xax / self.rhm33[0]) + background
-        ax[0].plot(xax, yp, c = 'k')
+        self.ax_rad[0].plot(xax, yp, c = 'k')
         
         #===================================================================
         #RADIAL PROFILE (LOG-LIN)
@@ -997,10 +1010,10 @@ class DataAnalysis():
                 Number_density.append(Nums[k]/(areas[k]))
             else:
                 Number_density.append(Nums[k]/(areas[k]-areas[k-1]))    
-        ax[1].scatter(radiuss,Number_density)            #creating scatter
-        ax[1].set_xlabel('Radius (deg)')
-        ax[1].set_yscale('log')
-        ax[1].set_ylim(1e3,5e5)
+        self.ax_rad[1].scatter(radiuss,Number_density)            #creating scatter
+        self.ax_rad[1].set_xlabel('Radius (deg)')
+        self.ax_rad[1].set_yscale('log')
+        self.ax_rad[1].set_ylim(1e3,5e5)
         #LINEAR REGRESSION STUFF
         Xs = radiuss             #x 
         Ys = np.log10(Number_density)   #loging y
@@ -1015,9 +1028,9 @@ class DataAnalysis():
         Ys_pred = Models.predict(Xs_plot_vals.reshape(-1,1))   #predicitng corresponding y values
         Ys_pred_log = 10**Ys_pred                 #un log those y valyes
         s_df = pd.DataFrame({'Radius': Xs_plot_vals, '$\Sigma$':Ys_pred_log.flatten()}) #creating data frame for ez plot
-        ax[1].plot(s_df['Radius'], s_df['$\Sigma$'], c = 'k')
-        ax[1].set_xlim(0,0.02)
-        ax[1].set_title('Log-Linear Radial Profile \n ra = '+ str(round(self.x0m33[0],3))+ ' dec = '+ str(round(self.y0m33[0],3)))
+        self.ax_rad[1].plot(s_df['Radius'], s_df['$\Sigma$'], c = 'k')
+        self.ax_rad[1].set_xlim(0,0.02)
+        self.ax_rad[1].set_title('Log-Linear Radial Profile \n ra = '+ str(round(self.x0m33[0],3))+ ' dec = '+ str(round(self.y0m33[0],3)))
         r = np.sqrt(Models.score(Xs, Ys))
         Int = Models.intercept_
         print('r coefficient =' , r, 'and Intercept', Int)
@@ -1098,18 +1111,18 @@ class DataAnalysis():
         y_max_zoom = self.Candidate_Coords.dec.deg + three_arcminutes
     
         # Optionally, you can plot the galaxy map
-        fig4, ax = plt.subplots(1, 2, figsize = (11,4))
-        AXIS = ax[0].imshow(self.significance_map.T, origin='lower',
-                   extent=[xBin[0], xBin[-1], yBin[0], yBin[-1]],
-                   cmap='plasma', interpolation='gaussian',
-                   aspect='auto')
-        fig4.colorbar(AXIS, ax = ax[0])
-        ax[0].set_title('Zoomed: Star and Galaxy')
-        ax[0].set_xlabel('Right Ascension (deg)')
-        ax[0].set_ylabel('Declination (deg)')
+        self.fig_map, self.ax_map = plt.subplots(1, 2, figsize = (11,4))
+        AXIS = self.ax_map[0].imshow(self.significance_map.T, origin='lower',
+                                     extent=[xBin[0], xBin[-1], yBin[0], yBin[-1]],
+                                     cmap='plasma', interpolation='gaussian',
+                                     aspect='auto')
+        self.fig_map.colorbar(AXIS, ax = self.ax_map[0])
+        self.ax_map[0].set_title('Zoomed: Star and Galaxy')
+        self.ax_map[0].set_xlabel('Right Ascension (deg)')
+        self.ax_map[0].set_ylabel('Declination (deg)')
         #plt.figure(figsize=(10, 10))
-        ax[0].set_xlim(x_min_zoom, x_max_zoom)
-        ax[0].set_ylim(y_min_zoom, y_max_zoom)
+        self.ax_map[0].set_xlim(x_min_zoom, x_max_zoom)
+        self.ax_map[0].set_ylim(y_min_zoom, y_max_zoom)
 
 
         #===================================================================
@@ -1138,43 +1151,66 @@ class DataAnalysis():
         circle1 = plt.Circle((c_m33.ra.deg, c_m33.dec.deg), 10, facecolor='None', edgecolor='0.5', ls='--')
         lin=plt.plot(r['RA'],r['Dec'],color='k',label='PAndAS')
         #ax.set_xlim(ax.get_xlim()[::-1])
-        ax[1].set_xlim(30,5)
-        ax[1].set_ylim(21,34)
-        ax[1].set_xlabel('RA (deg)')
-        ax[1].set_ylabel('Dec (deg)')
+        self.ax_map[1].set_xlim(30,5)
+        self.ax_map[1].set_ylim(21,34)
+        self.ax_map[1].set_xlabel('RA (deg)')
+        self.ax_map[1].set_ylabel('Dec (deg)')
         
         # Pisc VII
         ra1, dec1 = 20.419, 26.391 # P7
         #Overdensity
         ra2, dec2 = self.x0m33[0], self.y0m33[0]
         
-        ax[1].add_patch(circle1)
+        self.ax_map[1].add_patch(circle1)
         
-        ax[1].scatter([ra1],[dec1], marker = '*', s = 300, c = 'mediumpurple', edgecolor='k')
-        ax[1].scatter([ra2],[dec2], marker = '*', s = 500, c = 'rebeccapurple', edgecolor='k')
-        ax[1].scatter(c_m33.ra.deg, c_m33.dec.deg, marker = 'o', s = 100, c = 'k')
-        ax[1].scatter(c_a22.ra.deg, c_a22.dec.deg, marker = '*', s = 300, c = 'mediumpurple',edgecolor='k',zorder=100)
-        ax[1].scatter(c_a16.ra.deg, c_a16.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax[1].scatter(c_a11.ra.deg, c_a11.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax[1].scatter(c_a12.ra.deg, c_a12.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax[1].scatter(c_a13.ra.deg, c_a13.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax[1].scatter(c_a14.ra.deg, c_a14.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax[1].scatter(c_a2.ra.deg, c_a2.dec.deg, marker = '*', s = 200, c = 'mediumpurple',edgecolor='k')
-        ax[1].scatter(c_p1.ra.deg, c_p1.dec.deg, marker = '*', s = 200, c = 'mediumpurple',edgecolor='k')
-        ax[1].set_title('Location of Candidate around M33')
-        ax[1].text(ra2 - 0.5, dec2 + 0.25 , "Cand", fontsize =12)
-        ax[1].text(25,31, "M33" ,fontsize = 12)
-        ax[1].text(21,28., "And XXII/Tri I", fontsize = 12)
-        ax[1].text(19.5,26.2, "Pisces VII/Tri III", fontsize = 12)
-        ax[1].text(15,22.2, "Pisces I", fontsize = 12)
-        ax[1].text(25,32, "PAndAS footprint", c = '0.5')
+        self.ax_map[1].scatter([ra1],[dec1], marker = '*', s = 300, c = 'mediumpurple', edgecolor='k')
+        #ax[1].scatter([ra2],[dec2], marker = '*', s = 500, c = 'rebeccapurple', edgecolor='k')
+        self.ax_map[1].scatter(c_m33.ra.deg, c_m33.dec.deg, marker = 'o', s = 100, c = 'k')
+        self.ax_map[1].scatter(c_a22.ra.deg, c_a22.dec.deg, marker = '*', s = 300, c = 'mediumpurple',edgecolor='k',zorder=100)
+        self.ax_map[1].scatter(c_a16.ra.deg, c_a16.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        self.ax_map[1].scatter(c_a11.ra.deg, c_a11.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        self.ax_map[1].scatter(c_a12.ra.deg, c_a12.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        self.ax_map[1].scatter(c_a13.ra.deg, c_a13.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        self.ax_map[1].scatter(c_a14.ra.deg, c_a14.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        self.ax_map[1].scatter(c_a2.ra.deg, c_a2.dec.deg, marker = '*', s = 200, c = 'mediumpurple',edgecolor='k')
+        self.ax_map[1].scatter(c_p1.ra.deg, c_p1.dec.deg, marker = '*', s = 200, c = 'mediumpurple',edgecolor='k')
+        self.ax_map[1].set_title('Location of Candidate around M33')
+        #ax[1].text(ra2 - 0.5, dec2 + 0.25 , "Cand", fontsize =12)
+        self.ax_map[1].text(25,31, "M33" ,fontsize = 12)
+        self.ax_map[1].text(21,28., "And XXII/Tri I", fontsize = 12)
+        self.ax_map[1].text(19.5,26.2, "Pisces VII/Tri III", fontsize = 12)
+        self.ax_map[1].text(15,22.2, "Pisces I", fontsize = 12)
+        self.ax_map[1].text(25,32, "PAndAS footprint", c = '0.5')
+        
+    def saving_data(self):
+        Response = input("Do you want to save the data? (yes/no): ")
+        if Response == 'yes':
+            base_dir = "C:\\Users\\bboyg\\Documents\\SURREY PLACEMENT\\Ben MPhys\\Candidates\\"
+            results_dir = os.path.join(base_dir, f"Cand_{round(self.x0m33[0],3)}_{round(self.y0m33[0],3)}")
+            os.makedirs(results_dir, exist_ok=True)
+            # Save figures to the results directory
+            cmd_file_path = os.path.join(results_dir, 'CMD.png')
+            self.fig_CMD.savefig(cmd_file_path)
+
+            radial_file_path = os.path.join(results_dir, 'Radial_Profile.png')
+            self.fig_rad.savefig(radial_file_path)
+
+            map_file_path = os.path.join(results_dir, 'Map.png')
+            self.fig_map.savefig(map_file_path)
+
+            desi_file_path = os.path.join(results_dir, 'DESI.png')
+            screenshot = f.DESI(str(self.x0m33[0]), str(self.y0m33[0]))
+            screenshot.save(desi_file_path)
+
+            print('Figures are saved to:', results_dir)
+        
 
 if __name__ == "__main__":
     mpl.rcParams['axes.formatter.useoffset'] = False
     np.set_printoptions(suppress=True)
 
     # Initialize the DataAnalysis class with RA and DEC values
-    DataAnalysis = DataAnalysis(ra_file=16.0, dec_file=22.0)   # input chosen ra and dec file here
+    DataAnalysis = DataAnalysis(ra_file=22.0, dec_file=28.0)
     # Load and process su15,rvey data first
     DataAnalysis.load_and_process_survey_data()
     # Perform the data analysis steps
@@ -1202,3 +1238,4 @@ if __name__ == "__main__":
         DataAnalysis.Radial_Proflie()
         DataAnalysis.location_on_sig_map()
         DataAnalysis.Pandas()
+        DataAnalysis.saving_data()
