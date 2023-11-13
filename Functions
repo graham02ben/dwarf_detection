@@ -12,6 +12,15 @@ import pandas as pd
 from matplotlib.patches import Polygon
 import matplotlib.pyplot as plt
 import cv2
+from mpl_toolkits.mplot3d import Axes3D
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+import time
+import pyautogui
+import os
+from PIL import ImageGrab
 #Isochrone probability =============================================================
 #Functions to define how likely stars are member candidates
 def PCMD(xdata,ydata,isox1,isoy1, isox2, isoy2):
@@ -267,6 +276,49 @@ def ellipse(ra,rb,ang,x0,y0,Nb=50):
     Y=radm*np.cos(the)*si+co*radn*np.sin(the)+ypos
     return X,Y
 
+# DESI SCREENSHOTS ==================================================================
+def DESI(ra, dec):
+    driver = webdriver.Edge()
+    driver.get("https://www.legacysurvey.org/viewer")
+    driver.maximize_window()
+    time.sleep(2)
+    info_tab = driver.find_element(By.XPATH, '/html/body/div/div[2]/div[1]/div[1]')
+    time.sleep(1)
+    info_tab.click()
+    time.sleep(1)
+    pyautogui.press('tab')
+    time.sleep(1)
+    pyautogui.typewrite(str(ra))
+    time.sleep(1)
+    pyautogui.press('tab')
+    time.sleep(1)
+    pyautogui.typewrite(str(dec))
+    time.sleep(1)
+    pyautogui.press('tab')
+    time.sleep(1)
+    pyautogui.typewrite('13')
+    fly = driver.find_element(By.XPATH, '/html/body/div/div[2]/div[1]/div[1]/center/form/input[7]')
+    time.sleep(1)
+    fly.click()
+    for _ in range(32):
+        pyautogui.press('tab')
+    time.sleep(1)
+    for _ in range(3):
+        pyautogui.press('right')
+    time.sleep(1)
+    pyautogui.press('tab')
+    time.sleep(1)
+    for _ in range(44):
+        pyautogui.press('right')
+    left = 630
+    top = 300
+    width = 600
+    height = 600
+    # Capture the screenshot of the specified area
+    screenshot = ImageGrab.grab(bbox=(left, top, left + width, top + height))
+    #fig_screenshot = plt.plot(screenshot)
+    #plt.axis('off')
+    return screenshot # Save the screenshot to a file
 
 #Covolution and Padding =============================================================
 #Convolution using a Gaussian ======================================================
@@ -328,14 +380,27 @@ def gaussian_kernel(size, sigma=1, verbose=True):
     kernel_2D = np.outer(kernel_1D.T, kernel_1D.T)
 
     kernel_2D *= 1.0 / kernel_2D.max()
-    # print(kernel_2D)
-    # plt.imshow(kernel_2D, interpolation='none', cmap='gray')
-    # plt.title("Kernel ( {}X{} )".format(size, size))
-    # plt.show()
+    print(kernel_2D)
+    plt.imshow(kernel_2D, interpolation='none', cmap='gray')
+    #plt.title("Kernel ( {}X{} )".format(size, size))
+    plt.show()
     if verbose:
         plt.imshow(kernel_2D, interpolation='none', cmap='gray')
-        plt.title("Kernel ( {}X{} )".format(size, size))
+     #   plt.title("Kernel ( {}X{} )".format(size, size))
         plt.show()
+        
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    x = np.arange(0, size)
+    y = np.arange(0, size)
+    X, Y = np.meshgrid(x, y)
+
+    ax.plot_surface(X, Y, kernel_2D, cmap='viridis')
+    plt.show()
+
+    return kernel_2D
+
+
 
     return kernel_2D
 def gaussian_blur(image, kernel_size, verbose=False):
