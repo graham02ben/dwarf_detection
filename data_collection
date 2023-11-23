@@ -82,33 +82,9 @@ for ra in range(270, 301, int(ra_step * 10)):  # RA values from 15.0 to 30.0 wit
         
         # Start a new instance of Microsoft Edge for the second website (SkyServer)
         driver = webdriver.Edge()
-        driver.get("https://skyserver.sdss.org/dr18/VisualTools/explore/chartinfo")
-
-        # Maximize window
-        driver.maximize_window()
-
-        # Loop through the same actions performed in your initial code
-        for _ in range(6):
-            pyautogui.press('tab')
-        
-        pyautogui.typewrite(f"{ra_value}")
-        pyautogui.press('tab')
-        pyautogui.typewrite(f"{dec_value}")
-        pyautogui.press('tab')
-        pyautogui.typewrite("2")
-        pyautogui.press('left')
-        pyautogui.typewrite(".")
-        pyautogui.press('left')
-        pyautogui.press('left')
-        pyautogui.typewrite("8")
-        for _ in range(3):
-            pyautogui.press('tab')
-        pyautogui.typewrite("439")
-        pyautogui.press('tab')
-        pyautogui.typewrite("439")
-
+        driver.get(f"https://www.legacysurvey.org/viewer/jpeg-cutout?ra={ra_value}&dec={dec_value}&size=439&layer=ls-dr9&pixscale=8.2")
         # Right-click the image and save it
-        image_element = driver.find_element(By.XPATH, "/html/body/div[2]/div/div[2]/div/img")
+        image_element = driver.find_element(By.XPATH, "/html/body/img")
         actions = ActionChains(driver)
         actions.context_click(image_element).perform()
         pyautogui.press('down')
@@ -128,7 +104,6 @@ for ra in range(270, 301, int(ra_step * 10)):  # RA values from 15.0 to 30.0 wit
         except FileNotFoundError:
             print(f"Image file not found error for RA: {ra_value}, DEC: {dec_value}")
             continue  # Skip to the next iteration
-            
         # Close the browser
         driver.quit()
 
