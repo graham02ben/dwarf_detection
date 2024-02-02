@@ -1,0 +1,95 @@
+def Candidate_Locations(self):
+        """
+        Generates plot of where the candidate is on one singular plot. Please
+        note that this plots all candidates in the works "Triangulum and the
+        Seven Dwarfs", and the bad candidates as well. Candidates can be added
+        or removed to the users disgression.
+
+        Returns
+        -------
+        PAndAS Footprint plot
+        """
+        fig_mapped, ax_mapped = plt.subplots(1, 1)
+        c_m33 = get_icrs_coordinates("M33")
+        c_p1 = get_icrs_coordinates("Pisces I")
+        c_a22 = get_icrs_coordinates("Andromeda XXII")
+        c_a16= get_icrs_coordinates("Andromeda XVI")
+        c_a11= get_icrs_coordinates("Andromeda XI")
+        c_a12= get_icrs_coordinates("Andromeda XII")
+        c_a13= get_icrs_coordinates("Andromeda XIII")
+        c_a14= get_icrs_coordinates("Andromeda XIV")
+        c_a2= get_icrs_coordinates("Andromeda II")
+        # Read the field positions from NM file
+        r = np.genfromtxt('corners_PAndAS11.txt', dtype=None,
+                          names='RA,Dec',
+                          usecols=(0,1))        
+        circle1 = plt.Circle((c_m33.ra.deg, c_m33.dec.deg), 10, facecolor='None', edgecolor='0.5', ls='--')
+        lin=plt.plot(r['RA'],r['Dec'],color='k',label='PAndAS')
+        ax_mapped.set_xlim(30,5)
+        ax_mapped.set_ylim(21,34)
+        ax_mapped.set_xlabel('RA (deg)')
+        ax_mapped.set_ylabel('Dec (deg)')
+        
+        # Pisc VII
+        ra1, dec1 = 20.419, 26.391 # P7
+        #New candidate
+        ra2, dec2 = self.x0m33, self.y0m33
+        #Overdensity     
+        ax_mapped.add_patch(circle1)
+        #Add points and labels for the dwarf
+        ax_mapped.scatter([ra1],[dec1], marker = '*', s = 200, c = 'mediumpurple', edgecolor='k')
+        ax_mapped.scatter([ra2],[dec2], marker = '*', s = 200, c = 'mediumpurple', edgecolor='k')
+        ax_mapped.scatter(self.ra_cand_1, self.dec_cand_1, marker = '*', s = 200, c = 'teal', edgecolor='k')
+        ax_mapped.scatter(self.ra_cand_2, self.dec_cand_2, marker = '*', s = 200, color = '#CC3311', edgecolor='k')
+        ax_mapped.scatter(self.ra_cand_3, self.dec_cand_3, marker = '*', s = 200, color = '#DDCC77', edgecolor='k')
+        ax_mapped.scatter(self.ra_cand_4, self.dec_cand_4, marker = '*', s = 200, color = '#88CCEE', edgecolor='k')
+        
+        ax_mapped.scatter(21.636, 27.822, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(21.983, 25.685, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(22.016, 28.536 , marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(22.156, 28.826, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(22.418, 28.525, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(22.618, 28.622, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(24.499, 21.900 , marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(28.320, 33.436, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(28.450, 33.107, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(28.491, 31.503, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(28.675, 30.608, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(28.872, 30.805, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(28.879, 33.075, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+        ax_mapped.scatter(29.472, 31.096, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
+    
+        ax_mapped.scatter(c_m33.ra.deg, c_m33.dec.deg, marker = 'o', s = 100, c = 'k')
+        ax_mapped.scatter(c_a22.ra.deg, c_a22.dec.deg, marker = '*', s = 300, c = 'mediumpurple',edgecolor='k',zorder=100)
+        ax_mapped.scatter(c_a16.ra.deg, c_a16.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax_mapped.scatter(c_a11.ra.deg, c_a11.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax_mapped.scatter(c_a12.ra.deg, c_a12.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax_mapped.scatter(c_a13.ra.deg, c_a13.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax_mapped.scatter(c_a14.ra.deg, c_a14.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax_mapped.scatter(c_a2.ra.deg, c_a2.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        ax_mapped.scatter(c_p1.ra.deg, c_p1.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
+        #ax_mapped.set_title('Location of Candidate around M33')
+        ax_mapped.text(self.ra_cand_1 - 0.7, self.dec_cand_1 - 0.1 , "Cand 1", fontsize =8)
+        ax_mapped.text(self.ra_cand_2 - 0.7, self.dec_cand_2 - 0.1 , "Cand 2", fontsize =8)
+        ax_mapped.text(self.ra_cand_3 - 0.4, self.dec_cand_3 + 0.25 , "Cand 3", fontsize =8)
+        ax_mapped.text(self.ra_cand_4 + 2.3, self.dec_cand_4 + 0.30 , "Cand 4", fontsize =8)
+        ax_mapped.text(21.636 - 0.23, 27.822 + 0.08, "B1", fontsize = 8)
+        ax_mapped.text(21.983 + 1.2, 25.685 - 0.1, "B2", fontsize = 8)
+        ax_mapped.text(22.016 - 0.4, 28.536 - 0.1 , "B3", fontsize = 8)
+        ax_mapped.text(22.156, 28.826 + 0.3, "B4", fontsize = 8)
+        ax_mapped.text(22.418 + 1.2, 28.525 - 0.25, "B5", fontsize = 8)
+        ax_mapped.text(22.618 + 1.1, 28.622 +0.1, "B6", fontsize = 8)
+        ax_mapped.text(24.499 - 0.6, 21.900 - 0.1,"B7", fontsize = 8)
+        ax_mapped.text(28.320 - 0.5, 33.436 - 0, "B8", fontsize = 8)
+        ax_mapped.text(28.450 - 0.55, 33.107 -0.24, "B9", fontsize = 8)
+        ax_mapped.text(28.491 - 0.3, 31.503 + 0.2, "B10", fontsize = 8)
+        ax_mapped.text(28.675 - 0.15, 30.608 - 0.4,"B11", fontsize = 8)
+        ax_mapped.text(29.99, 30.11, "B12", fontsize = 8)
+        ax_mapped.text(28.879 + 1, 33.075 - 0.75, "B13", fontsize = 8)
+        ax_mapped.text(30, 31.45, "B14", fontsize = 8)
+        #ax_mapped.text(ra2 - 0.5, dec2 + 0.25 , "Cand", fontsize =12)
+        ax_mapped.text(25,31.15, "M33" ,fontsize = 8)
+        ax_mapped.text(25,27.7, "And XXII", fontsize = 8)
+        ax_mapped.text(19.7,26.25, "Pisces VII", fontsize = 8)
+        #ax_mapped.text(15.5,22.2, "Pisces I", fontsize = 10)
+        ax_mapped.text(25,32, "PAndAS footprint", c = '0.5')
