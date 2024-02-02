@@ -1,12 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Feb  1 19:48:06 2024
-
-@author: bboyg
-"""
-
-# -*- coding: utf-8 -*-
-"""
 Created on Thu Sep 21 12:03:28 2023
 
 @author: bboyg
@@ -19,7 +12,7 @@ from astropy.table import Table
 from PIL import Image
 from sklearn.cluster import KMeans
 import sklearn.metrics
-import astropy.units as u
+import astropy. units as u
 from astropy.coordinates import SkyCoord, get_icrs_coordinates, Angle
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -96,7 +89,7 @@ class DataAnalysis():
         self.ra_cand_2, self.dec_cand_2 = 21.072, 27.466
         self.ra_cand_3, self.dec_cand_3 = 24.579, 23.586
         self.ra_cand_4, self.dec_cand_4 = 25.287, 21.886
-        
+    
     def load_and_process_survey_data(self):
         """
         Takes data from chosen file. It extracts the ra, dec, magnitudes
@@ -906,7 +899,8 @@ class DataAnalysis():
 
         """
         self.ra_cmd, self.dec_cmd = input("RA:"), input("dec:")
-        
+
+
     def MCMC(self):
         """
         This runs a MCMC on the chosen candiadate. Take approximate coordinates of the
@@ -1048,7 +1042,6 @@ class DataAnalysis():
         plt.show()  
             ## Creating new centre profile for overdensity
         self.Candidate_Coords = SkyCoord(self.x0m33[0], self.y0m33[0], frame = 'icrs', unit=(u.deg, u.deg))
-  
 
     def Candidate_CMD(self):
         """
@@ -1278,22 +1271,34 @@ class DataAnalysis():
         ax[1,1].scatter(self.Candidate_Coords.ra.deg, self.Candidate_Coords.dec.deg, s=80, facecolors='none', edgecolors='r')
         
     def Pandas(self):
+        """
+        Plots the location of the candidate on a map with respect to M33 and surround dwarf galaxies.
+        The PAndAS survey is highlighted as well. 
+        In addition, a zoomed in density plot is made to see the overdensity clearly
+        on a significance map
+
+        Returns
+        -------
+        Zoomed in density map and location of candidate with repsect to M33
+
+        """
         Map, xBin, yBin = np.histogram2d(self.ra_data, self.dec_data,
                                                  bins=(np.arange(np.min(self.ra_data), np.max(self.ra_data), self.size),
                                                        np.arange(np.min(self.dec_data), np.max(self.dec_data), self.size)),
                                                  )
-        # Create a significance map for galaxies
+        # Create a significance map
         self.significance_map = (Map - np.mean(Map)) / np.std(Map)
         
         ###Radius 3 arcminute from Objects
-        three_arcminutes = 0.016667 * 3
-    
+        three_arcminutes = 0.05
+        #setting zoomed in boundaries
         x_min_zoom = self.Candidate_Coords.ra.deg - three_arcminutes
         x_max_zoom = self.Candidate_Coords.ra.deg + three_arcminutes
         y_min_zoom = self.Candidate_Coords.dec.deg - three_arcminutes
         y_max_zoom = self.Candidate_Coords.dec.deg + three_arcminutes
+        print(x_min_zoom, x_max_zoom, y_min_zoom, y_max_zoom)
     
-        # Optionally, you can plot the galaxy map
+        # Plotting zoomed in desnity map
         self.fig_map, self.ax_map = plt.subplots(1, 2, figsize = (11,4))
         AXIS = self.ax_map[0].imshow(self.significance_map.T, origin='lower',
                                      extent=[xBin[0], xBin[-1], yBin[0], yBin[-1]],
@@ -1306,13 +1311,13 @@ class DataAnalysis():
         #plt.figure(figsize=(10, 10))
         self.ax_map[0].set_xlim(x_min_zoom, x_max_zoom)
         self.ax_map[0].set_ylim(y_min_zoom, y_max_zoom)
-
+              
+        
 
         #===================================================================
         #PAndAS FOOTPRINT
         #===================================================================
         c_m33 = get_icrs_coordinates("M33")
-        c_m31 = get_icrs_coordinates("M31")
         c_p1 = get_icrs_coordinates("Pisces I")
         c_a22 = get_icrs_coordinates("Andromeda XXII")
         c_a16= get_icrs_coordinates("Andromeda XVI")
@@ -1321,7 +1326,6 @@ class DataAnalysis():
         c_a13= get_icrs_coordinates("Andromeda XIII")
         c_a14= get_icrs_coordinates("Andromeda XIV")
         c_a2= get_icrs_coordinates("Andromeda II")
-        c_a19= get_icrs_coordinates("Andromeda XIX")
         
         
         # Read the field positions from NM file
@@ -1342,12 +1346,11 @@ class DataAnalysis():
         # Pisc VII
         ra1, dec1 = 20.419, 26.391 # P7
         #Overdensity
-        ra2, dec2 = self.x0m33[0], self.y0m33[0]
-        
+        ra2, dec2 = self.x0m33[0], self.y0m33[0]        
         self.ax_map[1].add_patch(circle1)
-        
+        #Add points and labels for the dwarf
         self.ax_map[1].scatter([ra1],[dec1], marker = '*', s = 300, c = 'mediumpurple', edgecolor='k')
-        self.ax_map[1].scatter([ra2],[dec2], marker = '*', s = 500, c = 'rebeccapurple', edgecolor='k')
+        self.ax_map[1].scatter([ra2],[dec2], marker = '*', s = 300, c = 'mediumpurple', edgecolor='k')
         self.ax_map[1].scatter(c_m33.ra.deg, c_m33.dec.deg, marker = 'o', s = 100, c = 'k')
         self.ax_map[1].scatter(c_a22.ra.deg, c_a22.dec.deg, marker = '*', s = 300, c = 'mediumpurple',edgecolor='k',zorder=100)
         self.ax_map[1].scatter(c_a16.ra.deg, c_a16.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
@@ -1365,7 +1368,6 @@ class DataAnalysis():
         self.ax_map[1].text(15,22.2, "Pisces I", fontsize = 12)
         self.ax_map[1].text(25,32, "PAndAS footprint", c = '0.5')
         
-    
     def Candidate_Locations(self):
         """
         Generates plot of where the candidate is on one singular plot. Please
@@ -1461,10 +1463,8 @@ class DataAnalysis():
         ax_mapped.text(19.7,26.25, "Pisces VII", fontsize = 8)
         #ax_mapped.text(15.5,22.2, "Pisces I", fontsize = 10)
         ax_mapped.text(25,32, "PAndAS footprint", c = '0.5')
-    
-    
-    
-    
+        
+        
     def zoom(self):
         """
         Zoomed in significance map of the star and galaxy sources of the overdensity. 
@@ -1502,7 +1502,8 @@ class DataAnalysis():
         #plt.figure(figsize=(10, 10))
         self.ax_zoom.set_xlim(x_min_zoom, x_max_zoom)
         self.ax_zoom.set_ylim(y_min_zoom, y_max_zoom)
-        
+    
+    
     def saving_data(self):
         """
         If you want to save the data, you type 'y' and it saves the CMD, radial profile
@@ -1518,7 +1519,7 @@ class DataAnalysis():
         Response = input("Do you want to save the data? (y/n): ")
         if Response == 'y':
             # create file path to save file
-            base_dir = "C:\\Users\\bboyg\\Documents\\E.C. Hernadez\\Candidates\\"
+            base_dir = "C:\\Users\\bboyg\\Documents\\SURREY PLACEMENT\\Ben MPhys\\Candidates\\"
             #creating folder in chosen path to save png's
             results_dir = os.path.join(base_dir, f"(b)Cand_{round(self.x0m33[0],3)}_{round(self.y0m33[0],3)}")
             os.makedirs(results_dir, exist_ok=True)
@@ -1551,33 +1552,35 @@ if __name__ == "__main__":
     mpl.rcParams['axes.formatter.useoffset'] = False
     np.set_printoptions(suppress=True)
 
-    # # Initialize the DataAnalysis class with RA and DEC values
-    # DataAnalysis = DataAnalysis(ra_file=22.0, dec_file=28.0)
-    # # Load and process su15,rvey data first
-    # DataAnalysis.load_and_process_survey_data()
-    # # Perform the data analysis steps
-    # DataAnalysis.load_isochrone_data()
-    # DataAnalysis.load_and_process_telescope_image()
-    # DataAnalysis.create_star_map()
-    # DataAnalysis.create_galaxy_map()
-    # DataAnalysis.create_star_and_galaxy_map()
-    # DataAnalysis.create_significance_map()
-    # DataAnalysis.perform_cluster_analysis()
-    # DataAnalysis.Silhouette_graph()
-    # DataAnalysis.Calinski_Harabasz_graph()
-    # DataAnalysis.Davies_Bouldin_graph()
-    # DataAnalysis.Elbow_point_graph()
-    # DataAnalysis.CMD_star()
-    # DataAnalysis.CMD_galaxy()
-    # DataAnalysis.CMD_star_and_galaxy()
-    # DataAnalysis.CMD_telescope()
-    # DataAnalysis.Matching_Coords()
-    # num_iterations = int(input("Enter the number of times to repeat the analysis: "))
-    # for i in range(num_iterations):
-    #     DataAnalysis.Coordinate()
-    #     DataAnalysis.MCMC()
-    #     DataAnalysis.Candidate_CMD()
-    #     DataAnalysis.Radial_Proflie()
-    #     DataAnalysis.location_on_sig_map()
-    #     DataAnalysis.Pandas()
-    #     DataAnalysis.saving_data()
+    ## Initialize the DataAnalysis class with RA and DEC values
+    #DataAnalysis = DataAnalysis(ra_file=22.0, dec_file=28.0) # Input values here to run code
+    ## Load and process survey data first
+    #DataAnalysis.load_and_process_survey_data()
+    ## Perfor55m the data analysis steps
+    #DataAnalysis.load_isochrone_data()
+    #DataAnalysis.load_and_process_telescope_image()
+    #DataAnalysis.create_star_map()
+    #DataAnalysis.create_galaxy_map()
+    #DataAnalysis.create_star_and_galaxy_map()
+    #DataAnalysis.create_significance_map()
+    #DataAnalysis.perform_cluster_analysis()
+    #DataAnalysis.Silhouette_graph()
+    ##DataAnalysis.Calinski_Harabasz_graph()
+    #DataAnalysis.Davies_Bouldin_graph()
+    #DataAnalysis.Elbow_point_graph()
+    #DataAnalysis.CMD_star()
+    #DataAnalysis.CMD_galaxy()
+    #DataAnalysis.CMD_star_and_galaxy()
+    #DataAnalysis.CMD_telescope()
+    #DataAnalysis.Matching_Coords()
+    #num_iterations = int(input("Enter the number of times to repeat the analysis: "))
+    #for i in range(num_iterations):
+        #DataAnalysis.Coordinate()
+        #DataAnalysis.MCMC()
+        #DataAnalysis.Candidate_CMD()
+        #DataAnalysis.Radial_Proflie()
+        #DataAnalysis.location_on_sig_map()
+        #DataAnalysis.Pandas()
+        #DataAnalysis.Candidate_Locations()
+        #DataAnalysis.zoom()
+        #DataAnalysis.saving_data()
