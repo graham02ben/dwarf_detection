@@ -1,0 +1,33 @@
+import Dwarf_Detection as S
+
+DA = S.DataAnalysis(ra_file=22.0, dec_file=28.0) # Input values here to run code
+# Load and process survey data first
+S.DataAnalysis.load_and_process_survey_data(DA)
+# Perfor55m the data analysis steps
+S.DataAnalysis.load_isochrone_data(DA)
+S.DataAnalysis.load_and_process_telescope_image(DA)
+S.DataAnalysis.create_star_map(DA)
+S.DataAnalysis.create_galaxy_map(DA)
+S.DataAnalysis.create_star_and_galaxy_map(DA)
+S.DataAnalysis.create_significance_map(DA)
+S.DataAnalysis.perform_cluster_analysis(DA)
+S.DataAnalysis.Silhouette_graph(DA)
+#DataAnalysis.Calinski_Harabasz_graph()
+S.DataAnalysis.Davies_Bouldin_graph(DA)
+S.DataAnalysis.Elbow_point_graph(DA)
+S.DataAnalysis.CMD_star(DA)
+S.DataAnalysis.CMD_galaxy(DA)
+S.DataAnalysis.CMD_star_and_galaxy(DA)
+S.DataAnalysis.CMD_telescope(DA)
+S.DataAnalysis.Matching_Coords(DA)
+num_iterations = int(input("Enter the number of times to repeat the analysis: "))
+for i in range(num_iterations):
+    S.DataAnalysis.Coordinate(DA)
+    S.DataAnalysis.MCMC(DA)
+    S.DataAnalysis.Candidate_CMD(DA)
+    S.DataAnalysis.Radial_Proflie(DA)
+    S.DataAnalysis.location_on_sig_map(DA)
+    S.DataAnalysis.Pandas(DA)
+    S.DataAnalysis.Candidate_Locations(DA)
+    S.DataAnalysis.zoom(DA)
+    S.DataAnalysis.saving_data(DA)
