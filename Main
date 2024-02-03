@@ -1,6 +1,6 @@
 import Dwarf_Detection as S
 
-DA = S.DataAnalysis(ra_file=22.0, dec_file=28.0) # Input values here to run code
+DA = S.DataAnalysis(ra_file=10.0, dec_file=28.0, step = 0.5) # Input ra and dec value for code. DO NOT ADJUST STEP VALUE.
 # Load and process survey data first
 S.DataAnalysis.load_and_process_survey_data(DA)
 # Perfor55m the data analysis steps
@@ -11,8 +11,6 @@ S.DataAnalysis.create_galaxy_map(DA)
 S.DataAnalysis.create_star_and_galaxy_map(DA)
 S.DataAnalysis.create_significance_map(DA)
 S.DataAnalysis.perform_cluster_analysis(DA)
-S.DataAnalysis.Silhouette_graph(DA)
-#DataAnalysis.Calinski_Harabasz_graph()
 S.DataAnalysis.Davies_Bouldin_graph(DA)
 S.DataAnalysis.Elbow_point_graph(DA)
 S.DataAnalysis.CMD_star(DA)
