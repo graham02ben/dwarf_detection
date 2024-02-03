@@ -1517,7 +1517,7 @@ class DataAnalysis():
             # create file path to save file
             base_dir = "C:\\Users\\bboyg\\Documents\\Elizabeth\\Candidates\\"
             #creating folder in chosen path to save png's
-            results_dir = os.path.join(base_dir, f"(b)Cand_{round(self.x0m33[0],3)}_{round(self.y0m33[0],3)}")
+            results_dir = os.path.join(base_dir, f"Cand_{round(self.x0m33[0],3)}_{round(self.y0m33[0],3)}")
             os.makedirs(results_dir, exist_ok=True)
             # Save figures to the results directory
             cmd_file_path = os.path.join(results_dir, 'CMD.png')
