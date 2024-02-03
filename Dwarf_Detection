@@ -137,7 +137,7 @@ class DataAnalysis():
 
         """
         # Define isochrone labels of interest (Metallicities)
-        self.isochrone_labels = [-2,-1.9,-1.8,-1.7,-1.6,-1.5]
+        self.isochrone_labels = [-2,-1.9,-1.8,-1.7,-1.6,-1.5,-1.4]
         #===================================================================
         #Isochrones - File path should be changed according to user
         #===================================================================  
@@ -147,6 +147,7 @@ class DataAnalysis():
         label17, isogmag17, isormag17 = np.loadtxt("Isochrone/Isochrone_mp_-1.7.txt", unpack=True, usecols=(9, 29, 30), dtype = 'f,f,f')
         label16, isogmag16, isormag16 = np.loadtxt("Isochrone/Isochrone_mp_-1.6.txt", unpack=True, usecols=(9, 29, 30), dtype = 'f,f,f')
         label15, isogmag15, isormag15 = np.loadtxt("Isochrone/Isochrone_mp_-1.5.txt", unpack=True, usecols=(9, 29, 30), dtype = 'f,f,f')
+        label14, isogmag14, isormag14 = np.loadtxt("Isochrone/Isochrone_mp_-1.4.txt", unpack=True, usecols=(9, 29, 30), dtype = 'f,f,f')
         ###Distance Modulus - Change for distance to galaxy
         d = 800000 #pc
         DM = 5*np.log10(d)-5 
@@ -157,16 +158,16 @@ class DataAnalysis():
         #Slicing so get gmag and rmag with only that label
         Isogmag = [isogmag2[label2 == isolabel], isogmag19[label19 == isolabel],
                    isogmag18[label18 == isolabel], isogmag17[label17 == isolabel],
-                   isogmag16[label16 == isolabel], isogmag15[label15 == isolabel]]
+                   isogmag16[label16 == isolabel], isogmag15[label15 == isolabel], isogmag14[label14 == isolabel]]
         IsoGmag = [isogmag2[label2 == Isolabel], isogmag19[label19 == Isolabel],
                    isogmag18[label18 == Isolabel], isogmag17[label17 == Isolabel],
-                   isogmag16[label16 == Isolabel], isogmag15[label15 == Isolabel]]
+                   isogmag16[label16 == Isolabel], isogmag15[label15 == Isolabel], isogmag14[label14 == Isolabel]]
         Isormag = [isormag2[label2 == isolabel],isormag19[label19 == isolabel],
                    isormag18[label18 == isolabel], isormag17[label17 == isolabel],
-                   isormag16[label16 == isolabel], isormag15[label15 == isolabel]]
+                   isormag16[label16 == isolabel], isormag15[label15 == isolabel], isormag14[label14 == isolabel]]
         IsoRmag = [isormag2[label2 == Isolabel],isormag19[label19 == Isolabel], 
                    isormag18[label18 == Isolabel], isormag17[label17 == Isolabel],
-                   isormag16[label16 == Isolabel], isormag15[label15 == Isolabel]]
+                   isormag16[label16 == Isolabel], isormag15[label15 == Isolabel], isormag14[label14 == Isolabel]]
         #correcting using distance modulus  
         NewIsog = []
         NewIsoG = []
