@@ -2,9 +2,10 @@ import numpy as np
 from scipy import integrate as ingt
 
 """
-This is an implementation of Martin et al 2016's MCMC dwarf galaxy structural parameter algorithm.
-It takes ra and dec for stars and determines the centroid, half light radius, position angle and 
-ellipticity.It also takes user defined priors etc.
+This is an implementation of Martin et al 2016's MCMC dwarf galaxy structural 
+parameter algorithm. It takes ra and dec for stars and  determines the 
+centroid, half light radius, position angle and ellipticity. It also takes user
+defined priors etc.
 """
 
 def lphot(params, x, y):
@@ -45,7 +46,7 @@ def lphot(params, x, y):
 def prior(params, priors):
     x0, y0, rh, e, theta, n = params
     xd, xu, yd, yu, rhu = priors
-    if 0 <= theta <= np.pi and 0 <= rh <= rhu and 0 <= e <= 1 and 0 <= n: #and xd <= x0 <= xu and yd <= y0 <= yu:
+    if 0 <= theta <= np.pi and 0 <= rh <= 1 and 0 <= e <= 1 and 0 <= n: #and xd <= x0 <= xu and yd <= y0 <= yu:
         return 1.0
     return -np.inf
 
