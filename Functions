@@ -1,10 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Sep 20 13:28:40 2023
-
-@author: bboyg
-"""
 import numpy as np
+import shutil
 import math as m
 from astropy.coordinates import SkyCoord
 from astropy import units as u
@@ -21,7 +16,118 @@ import time
 import pyautogui
 import os
 from PIL import ImageGrab
-#Isochrone probability =============================================================
+
+#Importing data
+def data_import(ra, dec, step):
+    base_dir = "C:\\Users\\bboyg\\Downloads\\" #This has to be download folder
+    ra_value = ra * 10 / 10.0
+    dec_value = dec * 10 / 10.0
+
+    if not os.path.exists(f"C:\\Users\\bboyg\\Documents\\Elizabeth\\DATA\\ra{ra_value}\\dec{dec_value}\\"): #create a data folder within datacollection folder
+        ra_dec_dir = os.path.join(base_dir, f"ra{ra_value}", f"dec{dec_value}")
+        os.makedirs(ra_dec_dir, exist_ok=True)
+
+        # Start a new instance of Microsoft Edge
+        driver = webdriver.Edge()
+        driver.get("https://datalab.noirlab.edu/query.php?name=ls_dr9.tractor")
+        # Maximize window
+        driver.maximize_window()
+        time.sleep(3)
+        # Find and click the "Query Interface" button
+        query_interface_button = driver.find_element(By.XPATH, "/html/body/div[1]/section/div/div/div[2]/div/nav/ul/li[2]")
+        time.sleep(1)
+        query_interface_button.click()
+        # Wait for the Query box to be visible and clickable
+        time.sleep(5)  # Adjust the sleep duration as needed
+
+        # Press tab twice to get to the query box using pyautogui
+        pyautogui.press('tab')
+        time.sleep(1)
+        pyautogui.press('tab')
+        time.sleep(1)
+                    
+        # Construct the SQL query with different RA and DEC values
+        sql_query = f"SELECT ra, dec, dered_mag_g, dered_mag_r, objid, ebv, type FROM ls_dr9.tractor WHERE 't' = Q3C_RADIAL_QUERY(ra, dec, {ra_value}, {dec_value}, {step})"
+        # Type the SQL query using pyautogui
+        pyautogui.typewrite(sql_query)
+        time.sleep(3)
+        # Press tab 11 times to get to the download button
+        for _ in range(11):
+            pyautogui.press('tab')
+        # Press download checkbox
+        pyautogui.press('space')
+        # Press shift tab to get to the download button
+        pyautogui.keyDown('shift')
+        pyautogui.press('tab')
+        pyautogui.keyUp('shift')
+        # Press enter to download
+        pyautogui.press('enter')
+        # Wait for the download to complete (you might need to adjust the time)
+        time.sleep(10)
+        # Define the file name
+        file_name = os.path.join(ra_dec_dir, f"result_ra{ra_value:.1f}_dec{dec_value:.1f}.txt")
+        time.sleep(1)
+        # Move the downloaded file to the desired directory
+        os.rename(os.path.join(base_dir, "result.txt"), file_name)
+        # Close the browser
+        driver.quit()
+            
+        # Start a new instance of Microsoft Edge for the second website (SkyServer)
+        driver = webdriver.Edge()
+        driver.get("https://skyserver.sdss.org/dr18/VisualTools/explore/chartinfo")
+        # Maximize window
+        driver.maximize_window()
+        # Loop through the same actions performed in your initial code
+        for _ in range(6):
+            pyautogui.press('tab')
+            
+        pyautogui.typewrite(f"{ra_value}")
+        pyautogui.press('tab')
+        pyautogui.typewrite(f"{dec_value}")
+        pyautogui.press('tab')
+        pyautogui.typewrite("2")
+        pyautogui.press('left')
+        pyautogui.typewrite(".")
+        pyautogui.press('left')
+        pyautogui.press('left')
+        pyautogui.typewrite("8")
+        for _ in range(3):
+            pyautogui.press('tab')
+        pyautogui.typewrite("439")
+        pyautogui.press('tab')
+        pyautogui.typewrite("439")
+
+        # Right-click the image and save it
+        image_element = driver.find_element(By.XPATH, "/html/body/div[2]/div/div[2]/div/img")
+        actions = ActionChains(driver)
+        actions.context_click(image_element).perform()
+        pyautogui.press('down')
+        pyautogui.press('down')
+        pyautogui.press('enter')
+        time.sleep(3)
+        pyautogui.typewrite("img")
+        pyautogui.press('enter')
+        time.sleep(3)
+
+        # Define the file paths for both the text file and the image
+        img_file_path = os.path.join(ra_dec_dir, f"img_ra{ra_value:.1f}_dec{dec_value:.1f}.jpg")
+        time.sleep(1)
+        # Move the downloaded image file to the same directory as the text file
+        os.rename(os.path.join(base_dir, "img.jpg"), img_file_path)       
+        # Close the browser
+        driver.quit()
+
+        source_directory = f"C:\\Users\\bboyg\\Downloads\\ra{ra_value}\\"    #adjust folder names accordingly
+        target_directory = "C:\\Users\\bboyg\\Documents\\Elizabeth\\DATA\\"
+        check_directory = f"C:\\Users\\bboyg\\Documents\\Elizabeth\\DATA\\ra{ra_value}\\" #can keep ra{ra_value} for these
+        if os.path.exists(check_directory):
+            shutil.move(f"C:\\Users\\bboyg\\Downloads\\ra{ra_value}\\dec{dec_value}\\", check_directory)
+            shutil.rmtree(source_directory)
+        else:
+            os.makedirs(target_directory, exist_ok=True)
+            shutil.move(source_directory, target_directory)
+
+#Isochrone probability ==========================================
 #Functions to define how likely stars are member candidates
 def PCMD(xdata,ydata,isox1,isoy1, isox2, isoy2):
     P_CMD = []
@@ -59,7 +165,7 @@ def PCMD_av(xdata,ydata,isox1,isoy1, isox2, isoy2):
         P_CMD_av.append(P_cmd_av)
     return np.sum(P_CMD_av)
 
-#Set up ============================================================================
+#Set up =============================================================
 def setup(xbin, ybin, x, y, size):
     Xob = xbin[x]+size/2    #the centre of the pixel.
     Yob = ybin[y]+size/2
@@ -69,8 +175,8 @@ def setup(xbin, ybin, x, y, size):
         c_Ob.append(C_Ob)
     return c_Ob
 
-#===================================================================================
-#Box around isochrone (CM Cuts) ====================================================
+#===================================================================
+#Box around isochrone (CM Cuts) ====================================
 def front_to_back(first, second):
     """Join two arrays front to back."""
     return np.append(first, second[::-1])
@@ -141,19 +247,21 @@ def box(prob, gmag, rmag, NewIsor, NewIsog, NewIsoR, NewIsoG):
     inside = inside3 + inside4
     x = gmag[inside] - rmag[inside]
     y = rmag[inside]
-    p = PCMD(x,y, iso3_df['color_G_R'], iso3_df['mag_R'], iso4_df['color_g_r'],iso4_df['mag_r'])                                       
+    p = PCMD(x,y, iso3_df['color_G_R'], iso3_df['mag_R'], 
+             iso4_df['color_g_r'],iso4_df['mag_r'])                                       
     return x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem
 
-#===================================================================================
-#Isochrone fitting probability =====================================================
+#====================================================================
+#Isochrone fitting probability ======================================
 def isochrone(gmag,rmag,isoG,isoR,isog,isor):
     Prob = []
     for i in range(len(isoG)):
-        Hey = PCMD_av(gmag-rmag,rmag,isoG[i]-isoR[i],isoR[i],isog[i]-isor[i],isor[i])
+        Hey = PCMD_av(gmag-rmag,rmag,isoG[i]-isoR[i],isoR[i],isog[i]-isor[i],
+                      isor[i])
         Prob.append(Hey)
     prob = Prob.index(np.max(Prob))
     return prob
-#===================================================================================
+#=====================================================================
 #Selection cuts in radius
 def cuts(c_Obs, immap, radius, radiusout, radiusin):
     select, dselect, distance = [], [], []
@@ -166,7 +274,7 @@ def cuts(c_Obs, immap, radius, radiusout, radiusin):
         dselect.append(Dselect)
     return select, dselect
 
-#Plotting ===========================================================================
+#====================================================================
 def cmd_plot(fig, axs, index, colouR, colour, maG, mag, x, y, colour4, mag4, colour3, mag3, p, fieldg, fieldr, obj, i, oc):
     axs[index].plot(colour4,mag4)
     axs[index].plot(colour3,mag3)
@@ -185,12 +293,13 @@ def cmd_plot(fig, axs, index, colouR, colour, maG, mag, x, y, colour4, mag4, col
     #titles
     axs[index].set_title('Object'+str(obj))
     #Object = Object + 1
-    axs[index].set_xlabel('g-r (mag)')
+    axs[index].set_xlabel('g-r (mag)', fontsize = 12)
+    axs[index].set_ylabel('r (mag)', fontsize = 12)
     return cbar
     
 
     
-#Matching Coords ====================================================================
+#Matching Coords ==================================================
 def match_coordsg(COORDINATES, COORDINATESG):
     sky_coords = []
     sky_coordsg = []
@@ -265,7 +374,7 @@ def match_coordsgt(COORDINATES, COORDINATESG):
      
                 
 
-# For PAndAS Footprint ==============================================================
+# For PAndAS Footprint ===============================================
 def ellipse(ra,rb,ang,x0,y0,Nb=50):
     xpos,ypos=x0,y0
     radm,radn=ra,rb
@@ -276,7 +385,7 @@ def ellipse(ra,rb,ang,x0,y0,Nb=50):
     Y=radm*np.cos(the)*si+co*radn*np.sin(the)+ypos
     return X,Y
 
-# DESI SCREENSHOTS ==================================================================
+# DESI SCREENSHOTS =====================================================
 def DESI(ra, dec):
     driver = webdriver.Edge()
     driver.get("https://www.legacysurvey.org/viewer")
@@ -314,14 +423,15 @@ def DESI(ra, dec):
     top = 300
     width = 600
     height = 600
+    time.sleep(10)
     # Capture the screenshot of the specified area
     screenshot = ImageGrab.grab(bbox=(left, top, left + width, top + height))
     #fig_screenshot = plt.plot(screenshot)
     #plt.axis('off')
     return screenshot # Save the screenshot to a file
 
-#Covolution and Padding =============================================================
-#Convolution using a Gaussian ======================================================
+#Covolution and Padding ============================================
+#Convolution using a Gaussian =======================================
 def convolution(image, kernel, average=False, verbose=False):
     if len(image.shape) == 3:
         print("Found 3 Channels : {}".format(image.shape))
@@ -373,6 +483,33 @@ def dnorm(x, mu, sd):
     return 1 / (np.sqrt(2 * np.pi) * sd) * np.e ** (-np.power((x - mu) / sd, 2) / 2)
 
 
+# def gaussian_kernel(size, sigma=1, verbose=True):
+#     kernel_1D = np.linspace(-(size // 2), size // 2, size)
+#     for i in range(size):
+#         kernel_1D[i] = dnorm(kernel_1D[i], 0, sigma)
+#     kernel_2D = np.outer(kernel_1D.T, kernel_1D.T)
+
+#     kernel_2D *= 1.0 / kernel_2D.max()
+#     print(kernel_2D)
+#     plt.imshow(kernel_2D, interpolation='none', cmap='viridis')
+#     #plt.title("Kernel ( {}X{} )".format(size, size))
+#     plt.show()
+#     if verbose:
+#         plt.imshow(kernel_2D, interpolation='none', cmap='gray')
+#      #   plt.title("Kernel ( {}X{} )".format(size, size))
+#         plt.show()
+        
+#     fig = plt.figure()
+#     ax = fig.add_subplot(111, projection='3d')
+#     x = np.arange(0, size)
+#     y = np.arange(0, size)
+#     X, Y = np.meshgrid(x, y)
+
+#     ax.plot_surface(X, Y, kernel_2D, cmap='viridis')
+#     plt.show()
+
+#     return kernel_2D
+
 def gaussian_kernel(size, sigma=1, verbose=True):
     kernel_1D = np.linspace(-(size // 2), size // 2, size)
     for i in range(size):
@@ -380,29 +517,43 @@ def gaussian_kernel(size, sigma=1, verbose=True):
     kernel_2D = np.outer(kernel_1D.T, kernel_1D.T)
 
     kernel_2D *= 1.0 / kernel_2D.max()
-    print(kernel_2D)
-    plt.imshow(kernel_2D, interpolation='none', cmap='gray')
-    #plt.title("Kernel ( {}X{} )".format(size, size))
-    plt.show()
-    if verbose:
-        plt.imshow(kernel_2D, interpolation='none', cmap='gray')
-     #   plt.title("Kernel ( {}X{} )".format(size, size))
-        plt.show()
-        
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    x = np.arange(0, size)
-    y = np.arange(0, size)
-    X, Y = np.meshgrid(x, y)
 
-    ax.plot_surface(X, Y, kernel_2D, cmap='viridis')
-    plt.show()
+    #fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    #ax1.imshow(kernel_2D, interpolation='none', cmap='viridis')
+    #ax1.set_xlabel("Pixel", fontsize=12)
+    #ax1.set_ylabel("Pixel", fontsize=12)
+    #ax2.axis("off")
+    ##if verbose:
+    ##    plt.show()
+
+    #ax2 = fig.add_subplot(122, projection='3d')
+    #x = np.arange(0, size)
+    #y = np.arange(0, size)
+    #X, Y = np.meshgrid(x, y)
+    #ax2.plot_surface(X, Y, kernel_2D, cmap='viridis')
+    #ax2.set_xlabel("Pixel", fontsize=12)
+    #ax2.set_ylabel("Pixel", fontsize=12)
+    #ax2.set_zlabel("Value", fontsize=12)
+    #ax2.spines['top'].set_visible(False)
+    #ax2.spines['right'].set_visible(False)
+    #ax2.spines['bottom'].set_visible(False)
+    #ax2.spines['left'].set_visible(False)
+    #ax2.xaxis.pane.fill = False
+    #ax2.yaxis.pane.fill = False
+    #ax2.zaxis.pane.fill = False
+    #ax2.xaxis.pane.edgecolor = 'none'
+    #ax2.yaxis.pane.edgecolor = 'none'
+    #ax2.zaxis.pane.edgecolor = 'none'
+    #ax2.view_init(30, 30)
+
+    #plt.show()
 
     return kernel_2D
 
+# Example usage
+#gaussian_kernel(21)
 
-
-    return kernel_2D
 def gaussian_blur(image, kernel_size, verbose=False):
     kernel = gaussian_kernel(kernel_size, sigma = m.sqrt(kernel_size), verbose=verbose)
     return convolution(image, kernel, average=True, verbose=verbose)
