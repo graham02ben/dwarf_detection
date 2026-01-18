@@ -1,0 +1,110 @@
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+import time
+import pyautogui
+import os
+
+# Create a directory structure to save the files
+base_dir = "C:\\Users\\bboyg\\Downloads\\"
+ra_step = 0.5
+dec_step = 0.5
+
+#Input RA and Dec ranges. This example goes between RA 27.0-30.0, dec 30.0-34.0, in steps of 0.5deg
+for ra in range(270, 301, int(ra_step * 10)):  # RA values from 15.0 to 30.0 with increments of 0.5
+    for dec in range(300, 341, int(dec_step * 10)):  # DEC values from 22.0 to 30.0 with increments of 0.5
+        ra_value = ra / 10.0
+        dec_value = dec / 10.0
+
+        ra_dec_dir = os.path.join(base_dir, f"ra{ra_value}", f"dec{dec_value}")
+        os.makedirs(ra_dec_dir, exist_ok=True)
+
+        # Start a new instance of Microsoft Edge
+        driver = webdriver.Edge()
+        driver.get("https://datalab.noirlab.edu/query.php?name=ls_dr9.tractor")
+        
+        # Maximize window
+        driver.maximize_window()
+        time.sleep(3)
+        # Find and click the "Query Interface" button
+        query_interface_button = driver.find_element(By.XPATH, "/html/body/div[1]/section/div/div/div[2]/div/nav/ul/li[2]")
+        time.sleep(1)
+        query_interface_button.click()
+
+        # Wait for the Query box to be visible and clickable
+        time.sleep(5)  # Adjust the sleep duration as needed
+
+        # Press tab twice to get to the query box using pyautogui
+        pyautogui.press('tab')
+        time.sleep(1)
+        pyautogui.press('tab')
+        time.sleep(1)
+        
+                # Construct the SQL query with different RA and DEC values
+        sql_query = f"SELECT ra, dec, dered_mag_g, dered_mag_r, objid, ebv, type FROM ls_dr9.tractor WHERE 't' = Q3C_RADIAL_QUERY(ra, dec, {ra_value}, {dec_value}, {ra_step})"
+
+        # Type the SQL query using pyautogui
+        pyautogui.typewrite(sql_query)
+
+        time.sleep(3)
+
+        # Press tab 11 times to get to the download button
+        for _ in range(11):
+            pyautogui.press('tab')
+
+        # Press download checkbox
+        pyautogui.press('space')
+
+        # Press shift tab to get to the download button
+        pyautogui.keyDown('shift')
+        pyautogui.press('tab')
+        pyautogui.keyUp('shift')
+
+        # Press enter to download
+        pyautogui.press('enter')
+
+        # Wait for the download to complete (you might need to adjust the time)
+        time.sleep(10)
+
+        # Define the file name
+        file_name = os.path.join(ra_dec_dir, f"result_ra{ra_value:.1f}_dec{dec_value:.1f}.txt")
+        time.sleep(1)
+        # Move the downloaded file to the desired directory
+        try:
+            os.rename(os.path.join(base_dir, "result.txt"), file_name)
+        except FileNotFoundError:
+            print(f"File not found error for RA: {ra_value}, DEC: {dec_value}")
+            continue  # Skip to the next iteration
+
+        # Close the browser
+        driver.quit()
+        
+        # Start a new instance of Microsoft Edge for the second website (SkyServer)
+        driver = webdriver.Edge()
+        driver.get(f"https://www.legacysurvey.org/viewer/jpeg-cutout?ra={ra_value}&dec={dec_value}&size=439&layer=ls-dr9&pixscale=8.2")
+        # Right-click the image and save it
+        image_element = driver.find_element(By.XPATH, "/html/body/img")
+        actions = ActionChains(driver)
+        actions.context_click(image_element).perform()
+        pyautogui.press('down')
+        pyautogui.press('down')
+        pyautogui.press('enter')
+        time.sleep(3)
+        pyautogui.typewrite("img")
+        pyautogui.press('enter')
+        time.sleep(3)
+
+        # Define the file paths for both the text file and the image
+        img_file_path = os.path.join(ra_dec_dir, f"img_ra{ra_value:.1f}_dec{dec_value:.1f}.jpg")
+        time.sleep(1)
+        # Move the downloaded image file to the same directory as the text file
+        try:
+            os.rename(os.path.join(base_dir, "img.jpg"), img_file_path)
+        except FileNotFoundError:
+            print(f"Image file not found error for RA: {ra_value}, DEC: {dec_value}")
+            continue  # Skip to the next iteration
+        # Close the browser
+        driver.quit()
+
+print("All downloads completed.")
