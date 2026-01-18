@@ -1,5 +1,4 @@
 import numpy as np
-import shutil
 import math as m
 from astropy.coordinates import SkyCoord
 from astropy import units as u
@@ -7,125 +6,15 @@ import pandas as pd
 from matplotlib.patches import Polygon
 import matplotlib.pyplot as plt
 import cv2
-from mpl_toolkits.mplot3d import Axes3D
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.edge.service import Service
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+
 import time
 import pyautogui
-import os
 from PIL import ImageGrab
 
-#Importing data
-def data_import(ra, dec, step):
-    base_dir = "C:\\Users\\bboyg\\Downloads\\" #This has to be download folder
-    ra_value = ra * 10 / 10.0
-    dec_value = dec * 10 / 10.0
-
-    if not os.path.exists(f"C:\\Users\\bboyg\\Documents\\Elizabeth\\DATA\\ra{ra_value}\\dec{dec_value}\\"): #create a data folder within datacollection folder
-        ra_dec_dir = os.path.join(base_dir, f"ra{ra_value}", f"dec{dec_value}")
-        os.makedirs(ra_dec_dir, exist_ok=True)
-
-        # Start a new instance of Microsoft Edge
-        driver = webdriver.Edge()
-        driver.get("https://datalab.noirlab.edu/query.php?name=ls_dr9.tractor")
-        # Maximize window
-        driver.maximize_window()
-        time.sleep(3)
-        # Find and click the "Query Interface" button
-        query_interface_button = driver.find_element(By.XPATH, "/html/body/div[1]/section/div/div/div[2]/div/nav/ul/li[2]")
-        time.sleep(1)
-        query_interface_button.click()
-        # Wait for the Query box to be visible and clickable
-        time.sleep(5)  # Adjust the sleep duration as needed
-
-        # Press tab twice to get to the query box using pyautogui
-        pyautogui.press('tab')
-        time.sleep(1)
-        pyautogui.press('tab')
-        time.sleep(1)
-                    
-        # Construct the SQL query with different RA and DEC values
-        sql_query = f"SELECT ra, dec, dered_mag_g, dered_mag_r, objid, ebv, type FROM ls_dr9.tractor WHERE 't' = Q3C_RADIAL_QUERY(ra, dec, {ra_value}, {dec_value}, {step})"
-        # Type the SQL query using pyautogui
-        pyautogui.typewrite(sql_query)
-        time.sleep(3)
-        # Press tab 11 times to get to the download button
-        for _ in range(11):
-            pyautogui.press('tab')
-        # Press download checkbox
-        pyautogui.press('space')
-        # Press shift tab to get to the download button
-        pyautogui.keyDown('shift')
-        pyautogui.press('tab')
-        pyautogui.keyUp('shift')
-        # Press enter to download
-        pyautogui.press('enter')
-        # Wait for the download to complete (you might need to adjust the time)
-        time.sleep(10)
-        # Define the file name
-        file_name = os.path.join(ra_dec_dir, f"result_ra{ra_value:.1f}_dec{dec_value:.1f}.txt")
-        time.sleep(1)
-        # Move the downloaded file to the desired directory
-        os.rename(os.path.join(base_dir, "result.txt"), file_name)
-        # Close the browser
-        driver.quit()
-            
-        # Start a new instance of Microsoft Edge for the second website (SkyServer)
-        driver = webdriver.Edge()
-        driver.get("https://skyserver.sdss.org/dr18/VisualTools/explore/chartinfo")
-        # Maximize window
-        driver.maximize_window()
-        # Loop through the same actions performed in your initial code
-        for _ in range(6):
-            pyautogui.press('tab')
-            
-        pyautogui.typewrite(f"{ra_value}")
-        pyautogui.press('tab')
-        pyautogui.typewrite(f"{dec_value}")
-        pyautogui.press('tab')
-        pyautogui.typewrite("2")
-        pyautogui.press('left')
-        pyautogui.typewrite(".")
-        pyautogui.press('left')
-        pyautogui.press('left')
-        pyautogui.typewrite("8")
-        for _ in range(3):
-            pyautogui.press('tab')
-        pyautogui.typewrite("439")
-        pyautogui.press('tab')
-        pyautogui.typewrite("439")
-
-        # Right-click the image and save it
-        image_element = driver.find_element(By.XPATH, "/html/body/div[2]/div/div[2]/div/img")
-        actions = ActionChains(driver)
-        actions.context_click(image_element).perform()
-        pyautogui.press('down')
-        pyautogui.press('down')
-        pyautogui.press('enter')
-        time.sleep(3)
-        pyautogui.typewrite("img")
-        pyautogui.press('enter')
-        time.sleep(3)
-
-        # Define the file paths for both the text file and the image
-        img_file_path = os.path.join(ra_dec_dir, f"img_ra{ra_value:.1f}_dec{dec_value:.1f}.jpg")
-        time.sleep(1)
-        # Move the downloaded image file to the same directory as the text file
-        os.rename(os.path.join(base_dir, "img.jpg"), img_file_path)       
-        # Close the browser
-        driver.quit()
-
-        source_directory = f"C:\\Users\\bboyg\\Downloads\\ra{ra_value}\\"    #adjust folder names accordingly
-        target_directory = "C:\\Users\\bboyg\\Documents\\Elizabeth\\DATA\\"
-        check_directory = f"C:\\Users\\bboyg\\Documents\\Elizabeth\\DATA\\ra{ra_value}\\" #can keep ra{ra_value} for these
-        if os.path.exists(check_directory):
-            shutil.move(f"C:\\Users\\bboyg\\Downloads\\ra{ra_value}\\dec{dec_value}\\", check_directory)
-            shutil.rmtree(source_directory)
-        else:
-            os.makedirs(target_directory, exist_ok=True)
-            shutil.move(source_directory, target_directory)
 
 #Isochrone probability ==========================================
 #Functions to define how likely stars are member candidates
@@ -300,77 +189,41 @@ def cmd_plot(fig, axs, index, colouR, colour, maG, mag, x, y, colour4, mag4, col
 
     
 #Matching Coords ==================================================
-def match_coordsg(COORDINATES, COORDINATESG):
-    sky_coords = []
-    sky_coordsg = []
-    for i in range(len(COORDINATES)):
-        sky_coords.append([round(COORDINATES[i].ra.deg,2),round(COORDINATES[i].dec.deg,2)])
-    for i in range(len(COORDINATESG)):
-        sky_coordsg.append([round(COORDINATESG[i].ra.deg,2),round(COORDINATESG[i].dec.deg,2)])
-    for i in range(len(sky_coords)):
-        for j in range(len(sky_coordsg)):       
-            if (sky_coords[i]) == (sky_coordsg[j]):
-                print('Object', i+1, '(S) = Object', j+1, "(G)")
+def match_coords(coords_a, coords_b, label_a, label_b, decimals=2, approx=False):
+    """
+    Match two lists of SkyCoord objects by rounded RA/Dec.
 
-def match_coordssg(COORDINATES, COORDINATESG):
-    sky_coords = []
-    sky_coordsg = []
-    for i in range(len(COORDINATES)):
-        sky_coords.append([round(COORDINATES[i].ra.deg,2),round(COORDINATES[i].dec.deg,2)])
-    for i in range(len(COORDINATESG)):
-        sky_coordsg.append([round(COORDINATESG[i].ra.deg,2),round(COORDINATESG[i].dec.deg,2)])
-    for i in range(len(sky_coords)):
-        for j in range(len(sky_coordsg)):       
-            if (sky_coords[i]) == (sky_coordsg[j]):
-                print('Object', i+1, '(S) = Object', j+1, "(SG)")
-                
-def match_coordgsg(COORDINATES, COORDINATESG):
-    sky_coords = []
-    sky_coordsg = []
-    for i in range(len(COORDINATES)):
-        sky_coords.append([round(COORDINATES[i].ra.deg,2),round(COORDINATES[i].dec.deg,2)])
-    for i in range(len(COORDINATESG)):
-        sky_coordsg.append([round(COORDINATESG[i].ra.deg,2),round(COORDINATESG[i].dec.deg,2)])
-    for i in range(len(sky_coords)):
-        for j in range(len(sky_coordsg)):       
-            if (sky_coords[i]) == (sky_coordsg[j]):
-                print('Object', i+1, '(G) = Object', j+1, "(SG)")
-                
-def match_coordst(COORDINATES, COORDINATESG):
-    sky_coords = []
-    sky_coordsg = []
-    for i in range(len(COORDINATES)):
-        sky_coords.append([round(COORDINATES[i].ra.deg,1),round(COORDINATES[i].dec.deg,1)])
-    for i in range(len(COORDINATESG)):
-        sky_coordsg.append([round(COORDINATESG[i].ra.deg,1),round(COORDINATESG[i].dec.deg,1)])
-    for i in range(len(sky_coords)):
-        for j in range(len(sky_coordsg)):       
-            if (sky_coords[i]) == (sky_coordsg[j]):
-                print('Object', i+1, '(S) \u2248 Object', j+1, "(T)")
-                
-def match_coordgt(COORDINATES, COORDINATESG):
-    sky_coords = []
-    sky_coordsg = []
-    for i in range(len(COORDINATES)):
-        sky_coords.append([round(COORDINATES[i].ra.deg,1),round(COORDINATES[i].dec.deg,1)])
-    for i in range(len(COORDINATESG)):
-        sky_coordsg.append([round(COORDINATESG[i].ra.deg,1),round(COORDINATESG[i].dec.deg,1)])
-    for i in range(len(sky_coords)):
-        for j in range(len(sky_coordsg)):       
-            if (sky_coords[i]) == (sky_coordsg[j]):
-                print('Object', i+1, '(G) \u2248 Object', j+1, "(T)")
-                
-def match_coordsgt(COORDINATES, COORDINATESG):
-    sky_coords = []
-    sky_coordsg = []
-    for i in range(len(COORDINATES)):
-        sky_coords.append([round(COORDINATES[i].ra.deg,1),round(COORDINATES[i].dec.deg,1)])
-    for i in range(len(COORDINATESG)):
-        sky_coordsg.append([round(COORDINATESG[i].ra.deg,1),round(COORDINATESG[i].dec.deg,1)])
-    for i in range(len(sky_coords)):
-        for j in range(len(sky_coordsg)):       
-            if (sky_coords[i]) == (sky_coordsg[j]):
-                print('Object', i+1, '(SG) \u2248 Object', j+1, "(T)")
+    Parameters
+    ----------
+    coords_a, coords_b : list[SkyCoord]
+        Lists of astropy SkyCoord objects.
+    label_a, label_b : str
+        Labels used in print output, e.g. "S", "G", "SG", "T".
+    decimals : int
+        Number of decimal places to round to before matching.
+        (Your original code uses 2 for exact, 1 for telescope comparisons.)
+    approx : bool
+        If True, prints '≈' instead of '='.
+    """
+    if coords_a is None or coords_b is None:
+        return
+
+    # Convert to rounded tuples for easy comparison
+    a_rounded = [(round(c.ra.deg, decimals), round(c.dec.deg, decimals)) for c in coords_a]
+    b_rounded = [(round(c.ra.deg, decimals), round(c.dec.deg, decimals)) for c in coords_b]
+
+    symbol = "≈" if approx else "="
+
+    # Speed-up: map coordinate -> indices in B (handles duplicates)
+    b_index = {}
+    for j, key in enumerate(b_rounded):
+        b_index.setdefault(key, []).append(j)
+
+    # Find matches
+    for i, key in enumerate(a_rounded):
+        if key in b_index:
+            for j in b_index[key]:
+                print(f"Object {i+1} ({label_a}) {symbol} Object {j+1} ({label_b})")
      
                 
 
@@ -387,7 +240,9 @@ def ellipse(ra,rb,ang,x0,y0,Nb=50):
 
 # DESI SCREENSHOTS =====================================================
 def DESI(ra, dec):
-    driver = webdriver.Edge()
+    #driver = webdriver.Edge()
+    service = Service(EdgeChromiumDriverManager().install())
+    driver = webdriver.Edge(service=service)
     driver.get("https://www.legacysurvey.org/viewer")
     driver.maximize_window()
     time.sleep(2)
@@ -429,141 +284,3 @@ def DESI(ra, dec):
     #fig_screenshot = plt.plot(screenshot)
     #plt.axis('off')
     return screenshot # Save the screenshot to a file
-
-#Covolution and Padding ============================================
-#Convolution using a Gaussian =======================================
-def convolution(image, kernel, average=False, verbose=False):
-    if len(image.shape) == 3:
-        print("Found 3 Channels : {}".format(image.shape))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        print("Converted to Gray Channel. Size : {}".format(image.shape))
-    else:
-        print("Image Shape : {}".format(image.shape))
- 
-    print("Kernel Shape : {}".format(kernel.shape))
- 
-    if verbose:
-        plt.imshow(image, cmap='gray')
-        plt.title("Image")
-        plt.show()
- 
-    image_row, image_col = image.shape
-    kernel_row, kernel_col = kernel.shape
- 
-    output = np.zeros(image.shape)
- 
-    pad_height = int((kernel_row - 1) / 2)
-    pad_width = int((kernel_col - 1) / 2)
- 
-    padded_image = np.zeros((image_row + (2 * pad_height), image_col + (2 * pad_width)))
- 
-    padded_image[pad_height:padded_image.shape[0] - pad_height, pad_width:padded_image.shape[1] - pad_width] = image
- 
-    if verbose:
-        plt.imshow(padded_image, cmap='gray')
-        plt.title("Padded Image")
-        plt.show()
- 
-    for row in range(image_row):
-        for col in range(image_col):
-            output[row, col] = np.sum(kernel * padded_image[row:row + kernel_row, col:col + kernel_col])
-            if average:
-                output[row, col] /= kernel.shape[0] * kernel.shape[1]
- 
-    print("Output Image size : {}".format(output.shape))
- 
-    if verbose:
-        plt.imshow(output, cmap='gray')
-        plt.title("Output Image using {}X{} Kernel".format(kernel_row, kernel_col))
-        plt.show()
- 
-    return output
-
-def dnorm(x, mu, sd):
-    return 1 / (np.sqrt(2 * np.pi) * sd) * np.e ** (-np.power((x - mu) / sd, 2) / 2)
-
-
-# def gaussian_kernel(size, sigma=1, verbose=True):
-#     kernel_1D = np.linspace(-(size // 2), size // 2, size)
-#     for i in range(size):
-#         kernel_1D[i] = dnorm(kernel_1D[i], 0, sigma)
-#     kernel_2D = np.outer(kernel_1D.T, kernel_1D.T)
-
-#     kernel_2D *= 1.0 / kernel_2D.max()
-#     print(kernel_2D)
-#     plt.imshow(kernel_2D, interpolation='none', cmap='viridis')
-#     #plt.title("Kernel ( {}X{} )".format(size, size))
-#     plt.show()
-#     if verbose:
-#         plt.imshow(kernel_2D, interpolation='none', cmap='gray')
-#      #   plt.title("Kernel ( {}X{} )".format(size, size))
-#         plt.show()
-        
-#     fig = plt.figure()
-#     ax = fig.add_subplot(111, projection='3d')
-#     x = np.arange(0, size)
-#     y = np.arange(0, size)
-#     X, Y = np.meshgrid(x, y)
-
-#     ax.plot_surface(X, Y, kernel_2D, cmap='viridis')
-#     plt.show()
-
-#     return kernel_2D
-
-def gaussian_kernel(size, sigma=1, verbose=True):
-    kernel_1D = np.linspace(-(size // 2), size // 2, size)
-    for i in range(size):
-        kernel_1D[i] = dnorm(kernel_1D[i], 0, sigma)
-    kernel_2D = np.outer(kernel_1D.T, kernel_1D.T)
-
-    kernel_2D *= 1.0 / kernel_2D.max()
-
-    #fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-
-    #ax1.imshow(kernel_2D, interpolation='none', cmap='viridis')
-    #ax1.set_xlabel("Pixel", fontsize=12)
-    #ax1.set_ylabel("Pixel", fontsize=12)
-    #ax2.axis("off")
-    ##if verbose:
-    ##    plt.show()
-
-    #ax2 = fig.add_subplot(122, projection='3d')
-    #x = np.arange(0, size)
-    #y = np.arange(0, size)
-    #X, Y = np.meshgrid(x, y)
-    #ax2.plot_surface(X, Y, kernel_2D, cmap='viridis')
-    #ax2.set_xlabel("Pixel", fontsize=12)
-    #ax2.set_ylabel("Pixel", fontsize=12)
-    #ax2.set_zlabel("Value", fontsize=12)
-    #ax2.spines['top'].set_visible(False)
-    #ax2.spines['right'].set_visible(False)
-    #ax2.spines['bottom'].set_visible(False)
-    #ax2.spines['left'].set_visible(False)
-    #ax2.xaxis.pane.fill = False
-    #ax2.yaxis.pane.fill = False
-    #ax2.zaxis.pane.fill = False
-    #ax2.xaxis.pane.edgecolor = 'none'
-    #ax2.yaxis.pane.edgecolor = 'none'
-    #ax2.zaxis.pane.edgecolor = 'none'
-    #ax2.view_init(30, 30)
-
-    #plt.show()
-
-    return kernel_2D
-
-# Example usage
-#gaussian_kernel(21)
-
-def gaussian_blur(image, kernel_size, verbose=False):
-    kernel = gaussian_kernel(kernel_size, sigma = m.sqrt(kernel_size), verbose=verbose)
-    return convolution(image, kernel, average=True, verbose=verbose)
-
-
-# if __name__ == '__main__':
-#     ap = argparse.ArgumentParser()
-#     ap.add_argument("-i", "--image", required=True, help="Path to the image")
-#     args = vars(ap.parse_args())
-
-#     image = cv2.imread(args["image"])
-
-#     gaussian_blur(image, 5, verbose=True)
