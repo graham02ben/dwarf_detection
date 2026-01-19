@@ -1,0 +1,157 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jan 19 20:01:23 2026
+
+@author: bboyg
+"""
+
+import math as m
+import numpy as np
+import matplotlib.pyplot as plt
+
+from numpy import inf
+import Functions as f
+
+def plot_cmd_mode(
+    *,
+    mode_label: str,                 # "S", "G", "SG" for printing
+    c_obs,                           # output of f.setup(...)
+    c_immap,                         # SkyCoord for star objects
+    gmag_star_data,
+    rmag_star_data,
+    NewIsoG, NewIsoR, NewIsog, NewIsor,
+    isochrone_labels,
+    radius,
+    radiusout,
+    radiusin,
+    cols: int = 5,
+    ylim=(20, 26),
+    fig_height_per_row: float = 40.0,
+):
+    """
+        Creates plot for star, galaxy, star & galaxy, telescope data. 
+        For this data, the coordinates for the overdensities are highlighted. 
+        
+        'Selects' shows the stars within one arcminute of the centre, 
+        where 'deselects' shows the field population between 1.732 and 2 arcminutes. 
+        
+        Functions determine the optimal isochrone metallicity to use and calculates 
+        the av membership probability for the memberstars and the field stars
+        
+        If the ratio between these numbers is <1.4, the candidate is removed and skipped to next one, If
+        higher, the code creates strict CM cuts around the isochrone, and makes sure there is enough stars
+        around for it candidate to be truely considered. 
+        
+        Plot this, with the field population on the same plot. This is repeated for all the overdensities until
+        left with plot just showing the overdensities that meet the criteria.
+    """
+    # selects: stars within radius; dselects: field population annulus
+    selects, dselects = f.cuts(c_obs, c_immap, radius, radiusout, radiusin)
+
+    rows = m.ceil(len(c_obs) / cols) if len(c_obs) > 0 else 1
+    fig, ax = plt.subplots(rows, cols, sharey=True)
+    axs = ax.ravel()  # works for rows=1 and rows>1
+
+    obj_num = 1
+    coordinates = []
+    oc = 0  #  “skip counter” that keeps subplot indexing aligned
+
+    for i in range(len(c_obs)):
+        oc += 1
+
+        # skip if any inf in selected stars
+        if any(value == inf for value in gmag_star_data[selects[i]]):
+            continue
+        oc -= 1
+
+        # choose best-fitting isochrone (index into NewIso* arrays)
+        prob = f.isochrone(
+            gmag_star_data[selects[i]],
+            rmag_star_data[selects[i]],
+            NewIsoG, NewIsoR, NewIsog, NewIsor
+        )
+
+        PCMavs = f.PCMD_av(
+            gmag_star_data[selects[i]] - rmag_star_data[selects[i]],
+            rmag_star_data[selects[i]],
+            NewIsoG[prob] - NewIsoR[prob], NewIsoR[prob],
+            NewIsog[prob] - NewIsor[prob], NewIsor[prob]
+        )
+
+        fieldprobs = f.PCMD_av(
+            gmag_star_data[dselects[i]] - rmag_star_data[dselects[i]],
+            rmag_star_data[dselects[i]],
+            NewIsoG[prob] - NewIsoR[prob], NewIsoR[prob],
+            NewIsog[prob] - NewIsor[prob], NewIsor[prob]
+        )
+
+        Death = PCMavs / fieldprobs
+        Sels = (Death > 1.4)
+
+        oc += 1
+        if Sels == False:
+            continue
+        oc -= 1
+
+        # strict CMD box around isochrone and membership selection
+        x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(
+            prob,
+            gmag_star_data[selects[i]],
+            rmag_star_data[selects[i]],
+            NewIsor, NewIsog, NewIsoR, NewIsoG
+        )
+
+        oc += 1
+        if np.count_nonzero(inside) < 10:
+            continue
+        if np.count_nonzero(insidem) < 1:
+            continue
+        oc -= 1
+
+        # plot into the correct subplot index
+        subplot_index = i - oc
+        f.cmd_plot(
+            fig, axs, subplot_index,
+            iso3_df['color_G_R'], iso4_df['color_g_r'],
+            iso3_df['mag_R'], iso4_df['mag_r'],
+            x, y,
+            loop4_df['color4_loop'], loop4_df['mag4_loop'],
+            loop3_df['color3_loop'], loop3_df['mag3_loop'],
+            p,
+            gmag_star_data[dselects[i]],
+            rmag_star_data[dselects[i]],
+            str(obj_num), i, oc
+        )
+
+        print(f"Object {obj_num} ({mode_label}) : Ratio = {Death} z = {isochrone_labels[prob]}")
+        print("Coordinates:", c_obs[i])
+
+        coordinates.append(c_obs[i])
+        obj_num += 1
+
+    # figure sizing
+    final_plots = len(c_obs) - oc
+    final_rows = m.ceil(final_plots / cols) if final_plots > 0 else 1
+
+    
+    fig.set_figheight(fig_height_per_row * final_rows)
+    if final_plots > cols:
+        fig.set_figwidth(30)
+    else:
+        fig.set_figwidth(30 - (3 * (cols - final_plots)))
+
+    plt.ylim(*ylim)
+    fig.gca().invert_yaxis()
+
+    # delete unused axes
+    total_axes = cols * rows
+    if len(c_obs) > 0:
+        unused = oc + (total_axes - len(c_obs))
+        for k in range(unused):
+            idx = (cols * (m.ceil(len(c_obs) / cols)) - 1) - k
+            if 0 <= idx < len(axs):
+                fig.delaxes(axs[idx])
+
+    plt.show()
+
+    return coordinates, fig
