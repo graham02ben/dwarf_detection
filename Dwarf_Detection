@@ -2,21 +2,16 @@ import data_processing as dp
 
 import create_sig_maps as maps
 
-import cluster_analysis_graphs as cluster_graphs
+import cluster_analysis_graphs as cluster
+
+import cmd_graphs as CMD
 
 import Functions as f
-from numpy import inf
 
 import numpy as np
-from astropy.table import Table
-from PIL import Image
-from sklearn.cluster import KMeans
-import sklearn.metrics
 import astropy. units as u
 from astropy.coordinates import SkyCoord, get_icrs_coordinates, Angle
 import matplotlib.pyplot as plt
-import matplotlib as mpl
-import math as m
 import emcee
 import corner
 import Martin_sp as msp
@@ -39,8 +34,7 @@ class DataAnalysis():
         self.star_and_galaxy_map, self.significance_map = None, None
         self.cluster_labels, self.cluster_centers = None, None
         self.visualize_cluster_results = None
-        self.silhouette_avg, self.calinski_harabasz_avg = None, None
-        self.davies_bouldin_avg, self.elbow_point = None, None
+        self.davies_bouldin_avg = None
         self.wcss = None
         self.range_n_clusters = range(2, 40)
         
@@ -224,459 +218,100 @@ class DataAnalysis():
         plt.show()
         
         return xsel, ysel, sigmap, xbins, ybins
-        
+    
+    
+    def cluster_analysis(self):
+        self.davies_bouldin_avg, self.wcss, self.cluster_labels, self.cluster_centers = cluster.perform_cluster_analysis(self.range_n_clusters, self.telecoords)
+        cluster.Davies_Bouldin_graph(self.davies_bouldin_avg, self.range_n_clusters)
 
-    def perform_cluster_analysis(self):
+    def plot_cmds(self):
         """
-        For the map, it assigns k-means between 2-40 clusters. How well these fit
-        are judged on a score using the Davies Bouldin and Elbow method to 
-        determine the number of clusters. 
-
-        Returns
-        -------
-        cluster_centers, cluster_labels
-
-        """
-        # Assuming you have relevant data for clustering (e.g., significant coordinates)
-        # Define a range of cluster numbers to evaluate
-        # Initialize lists to store evaluation metrics
-        silhouette_avg = []
-        calinski_harabasz_avg = []
-        davies_bouldin_avg = []
-        for num_clusters in self.range_n_clusters:
-            # Initialize K-means clustering with a specific number of clusters
-            print("KMeans is:", KMeans)
-            print("Any NaNs:", np.isnan(self.telecoords).any())
-            print("Any Infs:", np.isinf(self.telecoords).any())
-            print("Shape:", self.telecoords.shape)
-
-            kmeans = KMeans(n_clusters=num_clusters, init='k-means++', n_init=10)
-            
-            print(self.telecoords)
-            kmeans.fit(self.telecoords)
-            cluster_labels = kmeans.labels_
-
-            # Calculate silhouette score
-            silhouette_avg.append(sklearn.metrics.silhouette_score(self.telecoords, cluster_labels))
-            # Calculate Calinski-Harabasz score (Variance Ratio Criterion)
-            calinski_harabasz_avg.append(sklearn.metrics.calinski_harabasz_score(self.telecoords, 
-                                                                                 cluster_labels))
-            # Calculate Davies-Bouldin score
-            davies_bouldin_avg.append(sklearn.metrics.davies_bouldin_score(self.telecoords, 
-                                                                           cluster_labels))
-        self.silhouette_avg = silhouette_avg
-        self.calinski_harabasz_avg = calinski_harabasz_avg
-        self.davies_bouldin_avg = davies_bouldin_avg
-        wcss = []
-        for i in (self.range_n_clusters):
-            kmeans = KMeans(n_clusters=i, init='k-means++', random_state=42)
-            kmeans.fit(self.telecoords)
-            wcss.append(kmeans.inertia_)
-        wcss_diff = np.diff(wcss)
-        # Calculate the percentage change between consecutive differences
-        percentage_change = (wcss_diff / wcss_diff[0]) * 100
-        # Find the elbow point as the first K where the percentage change drops significantly
-        elbow_point = np.argmax(percentage_change < 10) + 2 
-        self.elbow_point = elbow_point
-        self.wcss = wcss
-        # Determine the optimal number of clusters based on evaluation metrics
-        if davies_bouldin_avg.index(min(davies_bouldin_avg))+2 >= elbow_point:
-            optimal_num_clusters_davies_bouldin = davies_bouldin_avg.index(min(davies_bouldin_avg)) + 2
-        else:
-            optimal_num_clusters_davies_bouldin = elbow_point
-
-        # Choose the number of clusters based on the evaluation metric of your choice (e.g., Silhouette)
-        num_clusters = optimal_num_clusters_davies_bouldin
-
-        # Initialize K-means clustering with the chosen number of clusters
-        kmeans = KMeans(n_clusters=num_clusters, init='k-means++', n_init=10)
-        kmeans.fit(self.telecoords)
-
-        # Get cluster labels and cluster centers
-        cluster_labels = kmeans.labels_
-        cluster_centers = kmeans.cluster_centers_
-        # Store the results in class attributes
-        self.cluster_labels = cluster_labels
-        self.cluster_centers = cluster_centers
-        # Optionally, you can visualize the cluster results
-        plt.imshow(self.IPB_masked.T, origin='lower', label='Map', 
-                    extent=[self.xbinsg[0], self.xbinsg[-1], self.ybinsg[0], self.ybinsg[-1]],
-                    cmap='plasma', interpolation='gaussian', aspect='auto')
-        plt.colorbar()
-        #Scatter plot significant coordinates on top of the telescope image map
-        plt.scatter(self.significant_coords_RA, self.significant_coords_Dec, marker='o', s=3, c='w')
-        plt.scatter(cluster_centers[:,0],cluster_centers[:,1], marker='*', c='y', s=10)
-        #plt.title('Telescope Map', fontsize = 12)
-        plt.xlabel('RA (deg)', fontsize = 12)
-        plt.ylabel('dec (deg)', fontsize = 12)
-        plt.figure(figsize=(10, 10))
-
-    def plot_cluster_analysis_graphs(self, graphs):
-        """
-        Plots selected cluster analysis graphs.
-
-        Parameters
-        ----------
-        graphs : list or tuple of str
-            Any combination of:
-            ["silhouette", "calinski", "davies", "elbow"]
+        Runs and plots CMDs for:
+            1) Stars overdensities
+            2) Galaxies overdensities
+            3) Stars+Galaxies overdensities
+            4) Telescope overdensities
         """
 
-        # Normalize input (allow single string or list)
-        if isinstance(graphs, str):
-            graphs = [graphs]
+        # Make sure the stellar SkyCoord exists (your original CMD_star did this)
+        self.c_immap = SkyCoord(self.ra_star_data, self.dec_star_data, frame='icrs', unit=(u.deg, u.deg))
 
-        graphs = [g.lower() for g in graphs]
+        # --- Stars ---
+        c_obs_s = f.setup(self.xbins, self.ybins, self.xs, self.ys, self.size)
+        self.COORDINATES, _ = CMD.plot_cmd_mode(
+            mode_label="S",
+            c_obs=c_obs_s,
+            c_immap=self.c_immap,
+            gmag_star_data=self.gmag_star_data,
+            rmag_star_data=self.rmag_star_data,
+            NewIsoG=self.NewIsoG, NewIsoR=self.NewIsoR,
+            NewIsog=self.NewIsog, NewIsor=self.NewIsor,
+            isochrone_labels=self.isochrone_labels,
+            radius=self.radius,
+            radiusout=self.radiusout,
+            radiusin=self.radiusin,
+            cols=5,
+            ylim=(20, 26),
+            fig_height_per_row=40.0,
+        )
 
-        if "silhouette" in graphs:
-            cluster_graphs.Silhouette_graph(
-                self.silhouette_avg,
-                self.range_n_clusters
-            )
+        # --- Galaxies ---
+        c_obs_g = f.setup(self.xbing, self.ybing, self.xg, self.yg, self.size)
+        self.COORDINATEG, _ = CMD.plot_cmd_mode(
+            mode_label="G",
+            c_obs=c_obs_g,
+            c_immap=self.c_immap,
+            gmag_star_data=self.gmag_star_data,
+            rmag_star_data=self.rmag_star_data,
+            NewIsoG=self.NewIsoG, NewIsoR=self.NewIsoR,
+            NewIsog=self.NewIsog, NewIsor=self.NewIsor,
+            isochrone_labels=self.isochrone_labels,
+            radius=self.radius,
+            radiusout=self.radiusout,
+            radiusin=self.radiusin,
+            cols=5,
+            ylim=(20, 26),
+            fig_height_per_row=40.0,  # (you had 70 in CMD_galaxy; set to 70 if you want same)
+        )
 
-        if "calinski" in graphs:
-            cluster_graphs.Calinski_Harabasz_graph(
-                self.calinski_harabasz_avg,
-                self.range_n_clusters
-            )
+        # --- Stars + Galaxies ---
+        c_obs_sg = f.setup(self.xbinsg, self.ybinsg, self.xsg, self.ysg, self.size)
+        self.COORDINATESG, _ = CMD.plot_cmd_mode(
+            mode_label="SG",
+            c_obs=c_obs_sg,
+            c_immap=self.c_immap,
+            gmag_star_data=self.gmag_star_data,
+            rmag_star_data=self.rmag_star_data,
+            NewIsoG=self.NewIsoG, NewIsoR=self.NewIsoR,
+            NewIsog=self.NewIsog, NewIsor=self.NewIsor,
+            isochrone_labels=self.isochrone_labels,
+            radius=self.radius,
+            radiusout=self.radiusout,
+            radiusin=self.radiusin,
+            cols=5,
+            ylim=(20, 26),
+            fig_height_per_row=40.0,
+        )
 
-        if "davies" in graphs:
-            cluster_graphs.Davies_Bouldin_graph(
-                self.davies_bouldin_avg,
-                self.range_n_clusters
-            )
-
-        if "elbow" in graphs:
-            cluster_graphs.Elbow_point_graph(
-                self.elbow_point,
-                self.wcss,
-                self.range_n_clusters
-            )
-
-
-    def CMD_star(self):
-        """
-        Creates plot for star data. For this data, the coordinates for the overdensities are highlighted. 
-        'Selects' shows the stars within one arcminute of the centre, where 'deselects' shows the field
-        population between 1.732 and 2 arcminutes. 
-        Functions determine the optimal isochrone metallicity to use and calculates the av membership
-        probability for the memberstars and the field stars
-        If the ratio between these numbers is <1.4, the candidate is removed and skipped to next one, If
-        higher, the code creates strict CM cuts around the isochrone, and makes sure there is enough stars
-        around for it candidate to be truely considered. 
-        Plot this, with the field population on the same plot. This is repeated for all the overdensities until
-        left with plot just showing the overdensities that meet the criteria.
-
-        Returns
-        -------
-        CMD Star Subplots
-
-        """
-        self.c_immap = SkyCoord(self.ra_star_data, self.dec_star_data, frame = 'icrs', unit=(u.deg, u.deg))
-        #creates list of coordiantes of star objects.
-        c_Obs = f.setup(self.xbins, self.ybins, self.xs, self.ys, self.size)
-        #labels stars for being in the overdesitiy population and field population
-        selects, dselects = f.cuts(c_Obs, self.c_immap, self.radius, self.radiusout, self.radiusin)
-        Cols = 5
-        Rows = m.ceil(len(c_Obs)/Cols)
-        fig, ax = plt.subplots(Rows, Cols, sharey=True)
-        axs = ax.ravel()
-        Object = 1
-        COORDINATES = []
-        oc = 0
-        for i in range (len(c_Obs)):
-            oc+=1
-            if any(value == inf for value in self.gmag_star_data[selects[i]]):
-                continue
-            oc = oc - 1
-            prob = f.isochrone(self.gmag_star_data[selects[i]], self.rmag_star_data[selects[i]],
-                               self.NewIsoG, self.NewIsoR, self.NewIsog, self.NewIsor)
-            PCMavs = f.PCMD_av(self.gmag_star_data[selects[i]] - self.rmag_star_data[selects[i]],
-                               self.rmag_star_data[selects[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
-                               self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
-                               self.NewIsor[prob])
-            fieldprobs = f.PCMD_av(self.gmag_star_data[dselects[i]] - self.rmag_star_data[dselects[i]],
-                                   self.rmag_star_data[dselects[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
-                                   self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
-                                   self.NewIsor[prob])
-            Death = PCMavs/fieldprobs
-            Sels = (Death>1.4)
-            oc+=1
-            #If ratio is not above 1.4, the data is removed.
-            if Sels == False:
-                continue
-            oc = oc - 1
-            x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, self.gmag_star_data[selects[i]],
-                                                                                   self.rmag_star_data[selects[i]],
-                                                                                   self.NewIsor, self.NewIsog, self.NewIsoR, 
-                                                                                   self.NewIsoG)
-            oc+=1
-            if np.count_nonzero(inside)<10:
-                continue
-            if np.count_nonzero(insidem)<1:
-                continue
-            oc = oc - 1
-            f.cmd_plot(fig,axs,i-oc,iso3_df['color_G_R'], iso4_df['color_g_r'], 
-                       iso3_df['mag_R'], iso4_df['mag_r'], x, y, loop4_df['color4_loop'], 
-                       loop4_df['mag4_loop'], loop3_df['color3_loop'], loop3_df['mag3_loop'], 
-                       p, self.gmag_star_data[dselects[i]], self.rmag_star_data[dselects[i]], str(Object), i, oc)
-            print('Object',  str(Object), '(S) : Ratio =', Death, 'z =', self.isochrone_labels[prob])
-            print('Coordinates:', c_Obs[i])
-            COORDINATES.append(c_Obs[i])
-            Object = Object + 1
-        #plt.tight_layout()
-        self.COORDINATES = COORDINATES
-        final_rows = m.ceil((len(c_Obs)-oc) / Cols)
-        final_plots = len(c_Obs)-oc
-        if final_rows == 1:
-            fig.set_figheight(40)
-        else:
-            fig.set_figheight(40*final_rows)
-        if final_plots > 5:
-            fig.set_figwidth(30)
-        else:
-            fig.set_figwidth(30 - (3*(5-final_plots)))
-        plt.ylim(20,26)
-        fig.gca().invert_yaxis() 
-        for i in range(oc+((Cols*Rows)-len(c_Obs))):
-            fig.delaxes(axs[(Cols*(m.ceil(len(c_Obs)/Cols))-1)-i]) 
-        plt.show()
-        
-    def CMD_galaxy(self):
-        """
-        Creates plot for Galaxy data. Same as above.
-
-        Returns
-        -------
-        CMD Galaxy Subplots
-
-        """
-        c_Obg = f.setup(self.xbing, self.ybing, self.xg, self.yg, self.size)
-        selectg, dselectg = f.cuts(c_Obg, self.c_immap, self.radius, self.radiusout, self.radiusin)
-        Cols = 5
-        Rowg = m.ceil(len(c_Obg)/Cols)
-        fig, ax = plt.subplots(Rowg, Cols, sharey=True)
-        axs = ax.ravel()
-        Object = 1
-        COORDINATEG = []
-        oc = 0
-        for i in range (len(c_Obg)):
-            oc+=1
-            if any(value == inf for value in self.gmag_star_data[selectg[i]]):
-                continue
-            oc = oc - 1
-            prob = f.isochrone(self.gmag_star_data[selectg[i]], self.rmag_star_data[selectg[i]],
-                               self.NewIsoG, self.NewIsoR, self.NewIsog, self.NewIsor)
-            PCMavs = f.PCMD_av(self.gmag_star_data[selectg[i]] - self.rmag_star_data[selectg[i]],
-                               self.rmag_star_data[selectg[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
-                               self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
-                               self.NewIsor[prob])
-            fieldprobs = f.PCMD_av(self.gmag_star_data[dselectg[i]] - self.rmag_star_data[dselectg[i]],
-                                   self.rmag_star_data[dselectg[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
-                                   self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
-                                   self.NewIsor[prob])
-            Death = PCMavs/fieldprobs
-            Sels = (Death>1.4)
-            oc+=1
-            if Sels == False:
-                continue
-            oc = oc - 1
-            x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, self.gmag_star_data[selectg[i]],
-                                                                                   self.rmag_star_data[selectg[i]],
-                                                                                   self.NewIsor, self.NewIsog, self.NewIsoR, 
-                                                                                   self.NewIsoG)
-            oc+=1
-            if np.count_nonzero(inside)<10:
-                continue
-            if np.count_nonzero(insidem)<1:
-                continue
-            oc = oc - 1
-            f.cmd_plot(fig,axs,i-oc,iso3_df['color_G_R'], iso4_df['color_g_r'], 
-                       iso3_df['mag_R'], iso4_df['mag_r'], x, y, loop4_df['color4_loop'], 
-                       loop4_df['mag4_loop'], loop3_df['color3_loop'], loop3_df['mag3_loop'], 
-                       p, self.gmag_star_data[dselectg[i]], self.rmag_star_data[dselectg[i]], str(Object), i, oc)
-            print('Object',  str(Object), '(G) : Ratio =', Death, 'z =', self.isochrone_labels[prob])
-            print('Coordinates:', c_Obg[i])
-            COORDINATEG.append(c_Obg[i])
-            Object = Object + 1
-        #plt.tight_layout()
-        self.COORDINATEG = COORDINATEG
-        final_rows = m.ceil((len(c_Obg)-oc) / Cols)
-        final_plots = len(c_Obg)-oc
-        if final_rows == 1:
-            fig.set_figheight(70)
-        else:
-            fig.set_figheight(40*final_rows)
-        if final_plots > 5:
-            fig.set_figwidth(30)
-        else:
-            fig.set_figwidth(30 - (3*(5-final_plots)))
-        plt.ylim(20,26)
-        fig.gca().invert_yaxis() 
-        for i in range(oc+((Cols*Rowg)-len(c_Obg))):
-            fig.delaxes(axs[(Cols*(m.ceil(len(c_Obg)/Cols))-1)-i]) 
-        plt.show()        
-        
-    def CMD_star_and_galaxy(self):
-        """
-        Creates plot for Star and Galaxy data. Same as above.
-
-        Returns
-        -------
-        CMD Star and Galaxy Subplots
-
-        """
-        c_Obsg = f.setup(self.xbinsg, self.ybinsg, self.xsg, self.ysg, self.size)
-        selectsg, dselectsg = f.cuts(c_Obsg, self.c_immap, self.radius, self.radiusout, self.radiusin)
-
-        Cols = 5
-        Rowsg = m.ceil(len(c_Obsg)/Cols)
-        fig, ax = plt.subplots(Rowsg, Cols, sharey=True)
-        axs = ax.ravel()
-        Object = 1
-        COORDINATESG = []
-        oc = 0
-        for i in range (len(c_Obsg)):
-            oc+=1
-            if any(value == inf for value in self.gmag_star_data[selectsg[i]]):
-                continue
-            oc = oc - 1
-            prob = f.isochrone(self.gmag_star_data[selectsg[i]], self.rmag_star_data[selectsg[i]],
-                               self.NewIsoG, self.NewIsoR, self.NewIsog, self.NewIsor)
-            PCMavs = f.PCMD_av(self.gmag_star_data[selectsg[i]] - self.rmag_star_data[selectsg[i]],
-                               self.rmag_star_data[selectsg[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
-                               self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
-                               self.NewIsor[prob])
-            fieldprobs = f.PCMD_av(self.gmag_star_data[dselectsg[i]] - self.rmag_star_data[dselectsg[i]],
-                                   self.rmag_star_data[dselectsg[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
-                                   self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
-                                   self.NewIsor[prob])
-            Death = PCMavs/fieldprobs
-            Sels = (Death>1.4)
-            oc+=1
-            if Sels == False:
-                continue
-            oc = oc - 1
-            x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, self.gmag_star_data[selectsg[i]],
-                                                                                   self.rmag_star_data[selectsg[i]],
-                                                                                   self.NewIsor, self.NewIsog, self.NewIsoR, 
-                                                                                   self.NewIsoG)
-            oc+=1
-            if np.count_nonzero(inside)<10:
-                continue
-            if np.count_nonzero(insidem)<1:
-                continue
-            oc = oc - 1
-            f.cmd_plot(fig,axs,i-oc,iso3_df['color_G_R'], iso4_df['color_g_r'], 
-                       iso3_df['mag_R'], iso4_df['mag_r'], x, y, loop4_df['color4_loop'], 
-                       loop4_df['mag4_loop'], loop3_df['color3_loop'], loop3_df['mag3_loop'], 
-                       p, self.gmag_star_data[dselectsg[i]], self.rmag_star_data[dselectsg[i]], str(Object), i, oc)
-            print('Object',  str(Object), '(SG) : Ratio =', Death, 'z =', self.isochrone_labels[prob])
-            print('Coordinates:', c_Obsg[i])
-            COORDINATESG.append(c_Obsg[i])
-            Object = Object + 1
-        #plt.tight_layout()
-        self.COORDINATESG = COORDINATESG
-        final_rows = m.ceil((len(c_Obsg)-oc) / Cols)
-        final_plots = len(c_Obsg)-oc
-        if final_rows == 1:
-            fig.set_figheight(30)
-        else:
-            fig.set_figheight(40*final_rows)
-        if final_plots > 5:
-            fig.set_figwidth(30)
-        else:
-            fig.set_figwidth(30 - (3*(5-final_plots)))
-        plt.ylim(20,26)
-        fig.gca().invert_yaxis() 
-        for i in range(oc+((Cols*Rowsg)-len(c_Obsg))):
-            fig.delaxes(axs[(Cols*(m.ceil(len(c_Obsg)/Cols))-1)-i]) 
-        plt.show()
-        
-    def CMD_telescope(self):
-        """
-        Creates plot for telescope data. Uses center of cluster coordiantes
-        to use as overdensities zones to take data. Data is analysised same as above.
-
-        Returns
-        -------
-        CMD Telescope Subplots
-
-        """
-        t_coords = np.column_stack((self.cluster_centers[:,0],self.cluster_centers[:,1]))
+        # --- Telescope ---
+        t_coords = np.column_stack((self.cluster_centers[:, 0], self.cluster_centers[:, 1]))
         ra_degrees = Angle(t_coords[:, 0], unit='degree')
         dec_degrees = Angle(t_coords[:, 1], unit='degree')
-        c_Obt = SkyCoord(ra=ra_degrees, dec=dec_degrees, frame='icrs')
-        selectt, dselectt = f.cuts(c_Obt, self.c_immap, self.radius, self.radiusout, self.radiusin)
+        c_obs_t = SkyCoord(ra=ra_degrees, dec=dec_degrees, frame='icrs')
 
-        Cols = 5
-        Rowt = m.ceil(len(c_Obt)/Cols)
-        fig, ax = plt.subplots(Rowt, Cols, sharey=True)
-        axs = ax.ravel()
-        Object = 1
-        COORDINATET = []
-        oc = 0
-        for i in range (len(c_Obt)):
-            oc+=1
-            if any(value == inf for value in self.gmag_star_data[selectt[i]]):
-                continue
-            oc = oc - 1
-            prob = f.isochrone(self.gmag_star_data[selectt[i]], self.rmag_star_data[selectt[i]],
-                               self.NewIsoG, self.NewIsoR, self.NewIsog, self.NewIsor)
-            PCMavs = f.PCMD_av(self.gmag_star_data[selectt[i]] - self.rmag_star_data[selectt[i]],
-                               self.rmag_star_data[selectt[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
-                               self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
-                               self.NewIsor[prob])
-            fieldprobs = f.PCMD_av(self.gmag_star_data[dselectt[i]] - self.rmag_star_data[dselectt[i]],
-                                   self.rmag_star_data[dselectt[i]], self.NewIsoG[prob] - self.NewIsoR[prob],
-                                   self.NewIsoR[prob], self.NewIsog[prob] - self.NewIsor[prob], 
-                                   self.NewIsor[prob])
-            Death = PCMavs/fieldprobs
-            Sels = (Death>1.4)
-            oc+=1
-            if Sels == False:
-                continue
-            oc = oc - 1
-            x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, self.gmag_star_data[selectt[i]],
-                                                                                   self.rmag_star_data[selectt[i]],
-                                                                                   self.NewIsor, self.NewIsog, self.NewIsoR, 
-                                                                                   self.NewIsoG)
-            oc+=1
-            if np.count_nonzero(inside)<10:
-                continue
-            if np.count_nonzero(insidem)<1:
-                continue
-            oc = oc - 1
-            f.cmd_plot(fig,axs,i-oc,iso3_df['color_G_R'], iso4_df['color_g_r'], 
-                       iso3_df['mag_R'], iso4_df['mag_r'], x, y, loop4_df['color4_loop'], 
-                       loop4_df['mag4_loop'], loop3_df['color3_loop'], loop3_df['mag3_loop'], 
-                       p, self.gmag_star_data[dselectt[i]], self.rmag_star_data[dselectt[i]], str(Object), i, oc)
-            print('Object',  str(Object), '(T) : Ratio =', Death, 'z =', self.isochrone_labels[prob])
-            print('Coordinates:', c_Obt[i])
-            COORDINATET.append(c_Obt[i])
-            Object = Object + 1
-        #plt.tight_layout()
-        self.COORDINATET = COORDINATET
-        final_rows = m.ceil((len(c_Obt)-oc) / Cols)
-        final_plots = len(c_Obt)-oc
-        if final_rows == 1:
-            fig.set_figheight(10)
-        else:
-            fig.set_figheight(40*final_rows)
-        if final_plots > 5:
-            fig.set_figwidth(30)
-        else:
-            fig.set_figwidth(30 - (3*(5-final_plots)))
-        plt.ylim(20,26)
-        fig.gca().invert_yaxis() 
-        for i in range(oc+((Cols*Rowt)-len(c_Obt))):
-            fig.delaxes(axs[(Cols*(m.ceil(len(c_Obt)/Cols))-1)-i]) 
-        plt.show()    
+        self.COORDINATET, _ = CMD.plot_cmd_mode(
+            mode_label="T", c_obs=c_obs_t, c_immap=self.c_immap,
+            gmag_star_data=self.gmag_star_data, rmag_star_data=self.rmag_star_data,
+            NewIsoG=self.NewIsoG, NewIsoR=self.NewIsoR, NewIsog=self.NewIsog, NewIsor=self.NewIsor,
+            isochrone_labels=self.isochrone_labels,
+            radius=self.radius, radiusout=self.radiusout, radiusin=self.radiusin,
+            fig_height_per_row=40.0  # or match your old "10 if one row" via Option B below
+        )
         
 
     def Matching_Coords(self):
         """
-        Shows which overdensities on the subplots matches with eachother
+        Shows which overdensities on the subplots matches with each other.
 
         Returns
         -------
@@ -1347,41 +982,3 @@ class DataAnalysis():
             txt.close()     
         else:
             pass
-        
-
-if __name__ == "__main__":
-    mpl.rcParams['axes.formatter.useoffset'] = False
-    np.set_printoptions(suppress=True)
-
-    # # Initialize the DataAnalysis class with RA and DEC values
-    # DataAnalysis = DataAnalysis(ra_file=12.0, dec_file=28.0) # Input values here to run code
-    # # Load and process survey data first
-    # DataAnalysis.load_and_process_survey_data()
-    # # Perfor55m the data analysis steps
-    # DataAnalysis.load_isochrone_data()
-    # DataAnalysis.load_and_process_telescope_image()
-    # DataAnalysis.create_star_map()
-    # DataAnalysis.create_galaxy_map()
-    # DataAnalysis.create_star_and_galaxy_map()
-    # DataAnalysis.create_significance_map()
-    # DataAnalysis.perform_cluster_analysis()
-    # DataAnalysis.Silhouette_graph()
-    # #DataAnalysis.Calinski_Harabasz_graph()
-    # DataAnalysis.Davies_Bouldin_graph()
-    # DataAnalysis.Elbow_point_graph()
-    # DataAnalysis.CMD_star()
-    # DataAnalysis.CMD_galaxy()
-    # DataAnalysis.CMD_star_and_galaxy()
-    # DataAnalysis.CMD_telescope()
-    # DataAnalysis.Matching_Coords()
-    # num_iterations = int(input("Enter the number of times to repeat the analysis: "))
-    # for i in range(num_iterations):
-    #     DataAnalysis.Coordinate()
-    #     DataAnalysis.MCMC()
-    #     DataAnalysis.Candidate_CMD()
-    #     DataAnalysis.Radial_Proflie()
-    #     DataAnalysis.location_on_sig_map()
-    #     DataAnalysis.Pandas()
-    #     DataAnalysis.Candidate_Locations()
-    #     DataAnalysis.zoom()
-    #     DataAnalysis.saving_data()
