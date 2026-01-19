@@ -5,44 +5,16 @@ Created on Sun Jan 18 23:01:31 2026
 @author: bboyg
 """
 
+import numpy as np
+import sklearn.metrics
 import matplotlib.pyplot as plt
 
-def Silhouette_graph(silhouette_avg, range_n_clusters):
-    """
-    Plots the Silhouette scores for different values of K, showing highest value
-    as the optimal cluster numer
+from sklearn.cluster import KMeans
 
-    Returns
-    -------
-    Silhouette Plot.
-
-    """
-    print("Optimal number of clusters (Silhouette):", silhouette_avg.index(max(silhouette_avg))+2)
-    plt.plot(range_n_clusters, silhouette_avg,'bx-')
-    plt.xlabel('Values of K') 
-    plt.ylabel('Silhouette Score') 
-    plt.title('Silhouette Analysis for Optimal k')
-    plt.show()
-    
-def Calinski_Harabasz_graph(calinski_harabasz_avg, range_n_clusters):
-    """
-    For completeness, plots Calinski_Harabasz scores for different values of K,
-    
-    Returns
-    -------
-    Calinski Harbasz Plot.
-
-    """
-    plt.plot(range_n_clusters, calinski_harabasz_avg,'bx-')
-    plt.xlabel('Values of K') 
-    plt.ylabel('Calinski Harabasz Score') 
-    plt.title('Calinski Harabasz Analysis for Optimal k')
-    plt.show()
-    
 def Davies_Bouldin_graph(davies_bouldin_avg, range_n_clusters):
     """
-    Plots the Davies Bouldin scores for different values of K, showing lowest value
-    as the optimal cluster numer
+    Plots the Davies Bouldin scores for different values of K, showing the lowest value
+    as the optimal cluster number
 
     Returns
     -------
@@ -55,26 +27,46 @@ def Davies_Bouldin_graph(davies_bouldin_avg, range_n_clusters):
     plt.ylabel('Davies Bouldin Score', fontsize = 12) 
     plt.title('Davies Bouldin Analysis for Optimal k')
     plt.show()
-
-def Elbow_point_graph(elbow_point, wcss, range_n_clusters):
+    
+def perform_cluster_analysis(range_n_clusters, telecoords):
     """
-    Plots the WCSS against cluster, and for the point with the greatest rate
-    of change, is determined to be the optimal number of clusters
+    For the map, it assigns k-means between 2-40 clusters. How well do these fit
+    are judged on a score using the Davies Bouldin index to determine the 
+    number of clusters. 
 
     Returns
     -------
-    Eblow Point Plot.
+    cluster_centers, cluster_labels
 
     """
-    print("Optimal number of clusters (elbow point):", elbow_point)
-    plt.plot(range_n_clusters, wcss, marker='o', linestyle='-', color='b')
-    plt.xlabel('Number of Clusters (K)')
-    plt.ylabel('WCSS')
-    plt.title('Elbow Method for Optimal K')
-    plt.grid()
+    # Assuming you have relevant data for clustering (e.g., significant coordinates)
+    # Define a range of cluster numbers to evaluate
+    # Initialise lists to store evaluation metrics
+    davies_bouldin_avg = []
+    for num_clusters in range_n_clusters:
+        # Initialise K-means clustering with a specific number of clusters
+        kmeans = KMeans(n_clusters=num_clusters, init='k-means++', n_init=10)
+        kmeans.fit(telecoords)
+        cluster_labels = kmeans.labels_
+
+        # Calculate Davies-Bouldin score
+        davies_bouldin_avg.append(sklearn.metrics.davies_bouldin_score(telecoords, cluster_labels))
     
-    # Mark the elbow point on the graph
-    plt.scatter(elbow_point, wcss[elbow_point-2], 
-                c='red', marker='x', s=100, label='Elbow Point')
-    plt.legend()
-    plt.show()
+    wcss = []
+    for i in (range_n_clusters):
+        kmeans = KMeans(n_clusters=i, init='k-means++', random_state=42)
+        kmeans.fit(telecoords)
+        wcss.append(kmeans.inertia_)
+
+    # Determine the optimal number of clusters based on evaluation metrics
+    num_clusters = davies_bouldin_avg.index(min(davies_bouldin_avg)) + 2
+
+    # Initialize K-means clustering with the chosen number of clusters
+    kmeans = KMeans(n_clusters=num_clusters, init='k-means++', n_init=10)
+    kmeans.fit(telecoords)
+
+    # Get cluster labels and cluster centres
+    cluster_labels = kmeans.labels_
+    cluster_centers = kmeans.cluster_centers_
+    
+    return davies_bouldin_avg, wcss, cluster_labels, cluster_centers
