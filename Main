@@ -1,21 +1,17 @@
 import Dwarf_Detection as S
 
-DA = S.DataAnalysis(ra_file=12.0, dec_file=20.0) # Input ra and dec value for code.
-# Perform the data analysis steps
+DA = S.DataAnalysis(ra_file=12.0, dec_file=20.0) # Input ra and dec value for code. DO NOT ADJUST STEP VALUE.
+
 S.DataAnalysis.load_isochrone_data(DA)
 
 S.DataAnalysis.create_maps(DA)
 
-S.DataAnalysis.perform_cluster_analysis(DA)
+S.DataAnalysis.cluster_analysis(DA)
 
-S.DataAnalysis.plot_cluster_analysis_graphs(DA, ["davies", "elbow"])
+S.DataAnalysis.plot_cmds(DA)
 
-
-S.DataAnalysis.CMD_star(DA)
-S.DataAnalysis.CMD_galaxy(DA)
-S.DataAnalysis.CMD_star_and_galaxy(DA)
-S.DataAnalysis.CMD_telescope(DA)
 S.DataAnalysis.Matching_Coords(DA)
+
 num_iterations = int(input("Enter the number of times to repeat the analysis: "))
 for i in range(num_iterations):
     S.DataAnalysis.Coordinate(DA)
