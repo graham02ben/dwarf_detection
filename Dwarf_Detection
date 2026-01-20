@@ -50,7 +50,6 @@ class DataAnalysis():
         self.radius = 0.016667 #in degrees
         self.radiusin = 0.0288667 #in degrees
         self.radiusout = 0.0333333 # in degrees
-        self.radius_six = 0.1
         self.size = 0.01 # Size (in degrees) of each bin
         self.isochrone_labels = None
         self.ra_cmd, self.dec_cmd = None, None
@@ -69,13 +68,7 @@ class DataAnalysis():
         self.fig_CMD, self.axs_CMD = None, None
         self.fig_rad, self.ax_rad = None, None
         self.fig_map, self.ax_map = None, None
-        self.fig_screenshot, self.ax_screenshot = None, None
         self.fig_zoom, self.ax_zoom = None, None
-        
-        self.ra_cand_1, self.dec_cand_1 = 19.693, 25.086
-        self.ra_cand_2, self.dec_cand_2 = 21.072, 27.466
-        self.ra_cand_3, self.dec_cand_3 = 24.579, 23.586
-        self.ra_cand_4, self.dec_cand_4 = 25.287, 21.886
 
     def load_isochrone_data(
             self,
@@ -356,55 +349,61 @@ class DataAnalysis():
         Candidate_Coords = SkyCoord(self.ra_cmd, self.dec_cmd, frame = 'icrs', unit=(u.deg,u.deg))
         racr = Candidate_Coords.ra.radian
         deccr = Candidate_Coords.dec.radian
-        self.c_immap = SkyCoord(self.ra_star_data, self.dec_star_data, frame = 'icrs', unit = (u.deg, u.deg))
+        
         self.rar = self.c_immap.ra.radian
         self.decr = self.c_immap.dec.radian
+        
         #deproject coordinates and convert to arcmin
         xsep = (self.rar - racr) * np.cos(deccr) * ((180. * 60.) /np.pi)
         ysep = (self.decr - deccr) * ((180. * 60.) /np.pi)
         dist = np.sqrt(xsep ** 2 + ysep ** 2)
+        
         # data limits (colour cuts, radial cuts) for feeding into MCMC
-        mag_lim = 26 # approx completeness limit in r
+        mag_lim = 26 
         col_lim_up = 2
         col_lim_dn = -0.5
         dist_lim = 2.5
+        
         # enter priors for x and y
         priors = np.array([np.min(self.rar), np.max(self.rar), np.min(self.decr), np.max(self.decr),4])
-        #print(self.rar, np.min(self.rar), np.max(self.rar), self.decr, np.min(self.decr), np.max(self.decr))
         distance=self.c_immap.separation(Candidate_Coords)
         five_radius = 0.016667*5
         self.five_arcmin = distance.degree < five_radius
-        
         cc = self.five_arcmin & (dist<dist_lim)  & (self.rmag_star_data < mag_lim) & (col_lim_dn<self.gmag_star_data - self.rmag_star_data) & (self.gmag_star_data - self.rmag_star_data< col_lim_up)
+        
         #Initial guesses for the MCMC routine
-        x0i = racr #the by eye ra coord for centre defined above
-        y0i = deccr #the by eye dec coord for centre defined above
+        x0i = racr
+        y0i = deccr
         #edit these to suit your data:
-        ei = 0.2   #the ellipticity between 0-1 (i.e. is it roughly circular - lower values, very elliptical - higher values)
-        rhi = 1  #the half-light radius, roughly by eye in arc min 
-        ti =  0.5 #the postion angle - eh, put anything roughly sensible - I often go with 0.1 (in rad)
+        ei = 0.2   #the ellipticity between 0-1 (roughly circular - lower values, very elliptical - higher values)
+        rhi = 1  #the half-light radius (arc min) 
+        ti =  0.5 #the postion angle (rad)
         ni = 15  #the approx number of stars that are dwarf galaxy 
+        
         #===================================================================
         #MCMC
-        #print(self.rar[cc], np.min(self.rar[cc]), np.max(self.rar[cc]), self.decr[cc], np.min(self.decr[cc]), np.max(self.decr[cc]))
         #=================================================================== 
         initial=np.array([x0i, y0i, rhi, ei, ti, ni]) #feeds in initial guesses
         ndim, nwalkers = len(initial), 100 #sets number of dimensions (6 becuase we want to know six params) and number of walkers 
         pos = [np.array(initial) + 1e-4*np.random.randn(ndim) for i in range(nwalkers)] #sets initial postions for the 100 walkers
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, msp.lnp, args=(priors, self.rar[cc], self.decr[cc]))  #feed in the data (ra and dec in rad)
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, msp.lnp, args=(priors, self.rar[cc], self.decr[cc]))
+        
         print('Running Burn-In...')
         burn = sampler.run_mcmc(pos, 1500, progress = True)
         sampler.reset()
+        
         print('Running MCMC...')
         sampler.run_mcmc(burn, 4000, progress = True) #runs the analysis 10,000 times
         samples = sampler.get_chain(discard=100, thin=15, flat=True)#.reshape((-1,ndim))
-        #This converts the results into nice people friendly units e.g. rad -> deg
+        
+
         x_deg = ((samples[:, 0] * u.rad)).to(u.deg).value
         y_deg = ((samples[:, 1] * u.rad)).to(u.deg).value
         rh_arcmin = samples[:, 2]
         e = samples[:, 3]
         t_deg = ((samples[:, 4] * u.rad)).to(u.deg).value
         n = samples[:, 5]
+        
         #Visualising Walkers
         fig, axes = plt.subplots(ndim, figsize = (9, 8), sharex=True)
         Labels= [r"RA [$^\circ$]", r"dec [$^\circ$]", r"$r_h [^\prime]$", r"$\epsilon$",r"$\theta[^\circ$]",r"$N_*$"]
@@ -414,52 +413,20 @@ class DataAnalysis():
             ax.set_xlim(0, len(samples))
             ax.set_ylabel(Labels[i])
             ax.yaxis.set_label_coords(-0.1,0.5)
+            
+            
         np.set_printoptions(suppress=True,
                             formatter={'float_kind':'{:0.2f}'.format})
+        
         data = np.array([x_deg, y_deg, rh_arcmin, e, t_deg, n]).T
         self.x0m33, self.y0m33, self.rhm33, self.em33, self.tm33, self.nm33 = map(lambda b: (b[1], b[2]-b[1], b[1]-b[0]), zip(*np.percentile(data, [16, 50, 84],axis=0)))
         np.set_printoptions(suppress = True)
-        #change the number of sf from info above for the values and uncertainites
-        xmu = "{:.4f}".format(self.x0m33[0])
-        xsigp = "{:.4f}".format(self.x0m33[1])
-        xsign = "{:.4f}".format(self.x0m33[2])
-        ymu = "{:.3f}".format(self.y0m33[0])
-        ysigp = "{:1.3f}".format(self.y0m33[1])
-        ysign = "{:1.3f}".format(self.y0m33[2])
-        rhmu = "{:.2f}".format(self.rhm33[0])
-        rhsigp = "{:.2f}".format(self.rhm33[1])
-        rhsign = "{:.2f}".format(self.rhm33[2])
-        emu = "{:.2f}".format(self.em33[0])
-        esigp = "+{:.2f}".format(self.em33[1])
-        esign = "-{:.2f}".format(self.em33[2])
-        tmu = "{:.0f}".format(self.tm33[0])
-        tsigp = "{:.0f}".format(self.tm33[1])
-        tsign = "{:.0f}".format(self.tm33[2])
-        nmu = "{:.0f}".format(self.nm33[0])
-        nsigp = "{:.0f}".format(self.nm33[1])
-        nsign = "{:.0f}".format(self.nm33[2])
+        
         
         RA_CAND = Candidate_Coords.ra.deg
         DEC_CAND = Candidate_Coords.dec.deg
         ONA = ti*(180/np.pi)
         initials = [RA_CAND, DEC_CAND, rhi, ei, ONA, ni]
-        #This bit makes the titles for each value 
-        #use r'$^{{+{:.xf}}}_{{-{:.xf}}}$'.format(param[1], param[2]) format for uneven errors
-        #use r"$\pm$" + param_sigp for even errors
-        title1 = {r"$x_{0}$[$^\circ$] = " + xmu + r"$\pm$" + xsigp}
-        title2 = {r"$y_{0}[^\circ$] = " + ymu + r"$\pm$" + ysigp}
-        title3 = {r"$r_{h}$['] = " + rhmu + r'$^{{+{:.1f}}}_{{-{:.1f}}}$'.format(self.rhm33[1], self.rhm33[2])}
-        title4 = {r"$\epsilon$ = " + emu + r"$\pm$" + esigp}
-        title5 = {r"\theta [$^\circ$]= " + tmu + r'$^{{+{:.0f}}}_{{-{:.0f}}}$'.format(self.tm33[1], self.tm33[2])}
-        title6 = {r"$N*$ = " + nmu + r'$^{{+{:.0f}}}_{{-{:.0f}}}$'.format(self.nm33[1], self.nm33[2])}
-        titles = [title1, title2, title3, title4, title5, title6]
-        #title_fmt = {r"RA [$^\circ$]": r"{} $\pm$ {}".format(xmu, xsigp),
-        #             r"dec [$^\circ$]": r"{} $\pm$ {}".format(ymu, ysigp),
-        #             r"$r_h [^\prime]$": r"{}$^{{+{:.1f}}}_{{-{:.1f}}}$".format(rhmu, self.rhm33[1], self.rhm33[2]),
-        #             r"$\epsilon$": r"{} $\pm$ {}".format(emu, esigp),
-        #             r"$\theta[^\circ]$": r"{}$^{{+{:.0f}}}_{{-{:.0f}}}$".format(tmu, self.tm33[1], self.tm33[2]),
-        #             r"$N_*$": r"{}$^{{+{:.0f}}}_{{-{:.0f}}}$".format(nmu, self.nm33[1], self.nm33[2])
-        #             }
 
         # This part makes the corner plot
         figure = corner.corner(data, labels=[r"RA [$^\circ$]", r"dec [$^\circ$]", r"$r_h [^\prime]$", r"$\epsilon$", r"$\theta[^\circ]$", r"$N_*$"],
@@ -476,7 +443,8 @@ class DataAnalysis():
             
         axes[5,1].xaxis.set_major_formatter(FormatStrFormatter('%.3f'))
         plt.show()  
-            ## Creating new centre profile for overdensity
+        
+        # Creating new centre profile for overdensity
         self.Candidate_Coords = SkyCoord(self.x0m33[0], self.y0m33[0], frame = 'icrs', unit=(u.deg, u.deg))
 
     def Candidate_CMD(self):
@@ -533,9 +501,9 @@ class DataAnalysis():
         plt.tight_layout()
         self.ratio = PCMavs/fieldprob
         self.metal_of_isochrone = self.isochrone_labels[prob]
-        print('The Coordinates of the Candidate is:', self.x0m33[0], self.y0m33[0])
-        print('The ratio of a star being a memeber of a dwarf galaxy compare to the field population is', PCMavs/fieldprob)
-        print('The isochrone used has a metallicity of:', self.isochrone_labels[prob])
+        print('Candidate Coordinates:', self.x0m33[0], self.y0m33[0])
+        print('The ratio of a star being a member of a dwarf galaxy compared to the field population is', PCMavs/fieldprob)
+        print('Isochrone Metallicity:', self.isochrone_labels[prob])
 
     def Radial_Proflie(self):
         """
@@ -803,102 +771,7 @@ class DataAnalysis():
         self.ax_map[1].text(19.5,26.2, "Pisces VII/Tri III", fontsize = 12)
         self.ax_map[1].text(15,22.2, "Pisces I", fontsize = 12)
         self.ax_map[1].text(25,32, "PAndAS footprint", c = '0.5')
-        
-    def Candidate_Locations(self):
-        """
-        Generates plot of where the candidate is on one singular plot. Please
-        note that this plots all candidates in the works "Triangulum and the
-        Seven Dwarfs", and the bad candidates as well. Candidates can be added
-        or removed to the users disgression.
 
-        Returns
-        -------
-        PAndAS Footprint plot
-        """
-        fig_mapped, ax_mapped = plt.subplots(1, 1)
-        c_m33 = get_icrs_coordinates("M33")
-        c_p1 = get_icrs_coordinates("Pisces I")
-        c_a22 = get_icrs_coordinates("Andromeda XXII")
-        c_a16= get_icrs_coordinates("Andromeda XVI")
-        c_a11= get_icrs_coordinates("Andromeda XI")
-        c_a12= get_icrs_coordinates("Andromeda XII")
-        c_a13= get_icrs_coordinates("Andromeda XIII")
-        c_a14= get_icrs_coordinates("Andromeda XIV")
-        c_a2= get_icrs_coordinates("Andromeda II")
-        # Read the field positions from NM file
-        r = np.genfromtxt('corners_PAndAS11.txt', dtype=None,
-                          names='RA,Dec',
-                          usecols=(0,1))        
-        circle1 = plt.Circle((c_m33.ra.deg, c_m33.dec.deg), 10, facecolor='None', edgecolor='0.5', ls='--')
-        lin=plt.plot(r['RA'],r['Dec'],color='k',label='PAndAS')
-        ax_mapped.set_xlim(30,5)
-        ax_mapped.set_ylim(21,34)
-        ax_mapped.set_xlabel('RA (deg)')
-        ax_mapped.set_ylabel('Dec (deg)')
-        
-        # Pisc VII
-        ra1, dec1 = 20.419, 26.391 # P7
-        #New candidate
-        ra2, dec2 = self.x0m33, self.y0m33
-        #Overdensity     
-        ax_mapped.add_patch(circle1)
-        #Add points and labels for the dwarf
-        ax_mapped.scatter([ra1],[dec1], marker = '*', s = 200, c = 'mediumpurple', edgecolor='k')
-        ax_mapped.scatter([ra2],[dec2], marker = '*', s = 200, c = 'mediumpurple', edgecolor='k')
-        ax_mapped.scatter(self.ra_cand_1, self.dec_cand_1, marker = '*', s = 200, c = 'teal', edgecolor='k')
-        ax_mapped.scatter(self.ra_cand_2, self.dec_cand_2, marker = '*', s = 200, color = '#CC3311', edgecolor='k')
-        ax_mapped.scatter(self.ra_cand_3, self.dec_cand_3, marker = '*', s = 200, color = '#DDCC77', edgecolor='k')
-        ax_mapped.scatter(self.ra_cand_4, self.dec_cand_4, marker = '*', s = 200, color = '#88CCEE', edgecolor='k')
-        
-        ax_mapped.scatter(21.636, 27.822, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(21.983, 25.685, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(22.016, 28.536 , marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(22.156, 28.826, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(22.418, 28.525, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(22.618, 28.622, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(24.499, 21.900 , marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(28.320, 33.436, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(28.450, 33.107, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(28.491, 31.503, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(28.675, 30.608, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(28.872, 30.805, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(28.879, 33.075, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-        ax_mapped.scatter(29.472, 31.096, marker = '*', s = 100, color = '#BB5566', edgecolor='k')
-    
-        ax_mapped.scatter(c_m33.ra.deg, c_m33.dec.deg, marker = 'o', s = 100, c = 'k')
-        ax_mapped.scatter(c_a22.ra.deg, c_a22.dec.deg, marker = '*', s = 300, c = 'mediumpurple',edgecolor='k',zorder=100)
-        ax_mapped.scatter(c_a16.ra.deg, c_a16.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax_mapped.scatter(c_a11.ra.deg, c_a11.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax_mapped.scatter(c_a12.ra.deg, c_a12.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax_mapped.scatter(c_a13.ra.deg, c_a13.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax_mapped.scatter(c_a14.ra.deg, c_a14.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax_mapped.scatter(c_a2.ra.deg, c_a2.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        ax_mapped.scatter(c_p1.ra.deg, c_p1.dec.deg, marker = 'o', s = 50, c = 'thistle',edgecolor='k')
-        #ax_mapped.set_title('Location of Candidate around M33')
-        ax_mapped.text(self.ra_cand_1 - 0.7, self.dec_cand_1 - 0.1 , "Cand 1", fontsize =8)
-        ax_mapped.text(self.ra_cand_2 - 0.7, self.dec_cand_2 - 0.1 , "Cand 2", fontsize =8)
-        ax_mapped.text(self.ra_cand_3 - 0.4, self.dec_cand_3 + 0.25 , "Cand 3", fontsize =8)
-        ax_mapped.text(self.ra_cand_4 + 2.3, self.dec_cand_4 + 0.30 , "Cand 4", fontsize =8)
-        ax_mapped.text(21.636 - 0.23, 27.822 + 0.08, "B1", fontsize = 8)
-        ax_mapped.text(21.983 + 1.2, 25.685 - 0.1, "B2", fontsize = 8)
-        ax_mapped.text(22.016 - 0.4, 28.536 - 0.1 , "B3", fontsize = 8)
-        ax_mapped.text(22.156, 28.826 + 0.3, "B4", fontsize = 8)
-        ax_mapped.text(22.418 + 1.2, 28.525 - 0.25, "B5", fontsize = 8)
-        ax_mapped.text(22.618 + 1.1, 28.622 +0.1, "B6", fontsize = 8)
-        ax_mapped.text(24.499 - 0.6, 21.900 - 0.1,"B7", fontsize = 8)
-        ax_mapped.text(28.320 - 0.5, 33.436 - 0, "B8", fontsize = 8)
-        ax_mapped.text(28.450 - 0.55, 33.107 -0.24, "B9", fontsize = 8)
-        ax_mapped.text(28.491 - 0.3, 31.503 + 0.2, "B10", fontsize = 8)
-        ax_mapped.text(28.675 - 0.15, 30.608 - 0.4,"B11", fontsize = 8)
-        ax_mapped.text(29.99, 30.11, "B12", fontsize = 8)
-        ax_mapped.text(28.879 + 1, 33.075 - 0.75, "B13", fontsize = 8)
-        ax_mapped.text(30, 31.45, "B14", fontsize = 8)
-        #ax_mapped.text(ra2 - 0.5, dec2 + 0.25 , "Cand", fontsize =12)
-        ax_mapped.text(25,31.15, "M33" ,fontsize = 8)
-        ax_mapped.text(25,27.7, "And XXII", fontsize = 8)
-        ax_mapped.text(19.7,26.25, "Pisces VII", fontsize = 8)
-        #ax_mapped.text(15.5,22.2, "Pisces I", fontsize = 10)
-        ax_mapped.text(25,32, "PAndAS footprint", c = '0.5')
         
         
     def zoom(self):
@@ -918,8 +791,9 @@ class DataAnalysis():
         # Create a significance map
         self.significance_map = (Map - np.mean(Map)) / np.std(Map)
         
-        ###Radius 3 arcminute from Objects
+        # Radius 3 arcminute from Objects
         three_arcminutes = 0.05
+        
         #setting zoomed in boundaries
         x_min_zoom = self.Candidate_Coords.ra.deg - three_arcminutes
         x_max_zoom = self.Candidate_Coords.ra.deg + three_arcminutes
@@ -955,7 +829,7 @@ class DataAnalysis():
         Response = input("Do you want to save the data? (y/n): ")
         if Response == 'y':
             # create file path to save file
-            base_dir = "C:\\Users\\bboyg\\Documents\\Elizabeth\\Candidates\\"
+            base_dir = "~\\Candidates\\"
             #creating folder in chosen path to save png's
             results_dir = os.path.join(base_dir, f"Cand_{round(self.x0m33[0],3)}_{round(self.y0m33[0],3)}")
             os.makedirs(results_dir, exist_ok=True)
