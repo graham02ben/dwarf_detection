@@ -20,6 +20,5 @@ for i in range(num_iterations):
     S.DataAnalysis.Radial_Proflie(DA)
     S.DataAnalysis.location_on_sig_map(DA)
     S.DataAnalysis.Pandas(DA)
-    S.DataAnalysis.Candidate_Locations(DA)
     S.DataAnalysis.zoom(DA)
     S.DataAnalysis.saving_data(DA)
