@@ -7,7 +7,3 @@ By inputting the coordinates of the chosen overdensity, one can run an MCMC to r
 Code outputs: CMD compared to a field, radial profile, MCMC corner plot, local area location and zoomed-in density map.
 
 For simplicity, the code should be saved within one folder, with the corners_PAndAS11.txt saved too. The Isochrone folder should be saved within the main folder, and two empty folders should be created. One named 'DATA', one named 'Candidates'.
-
-Minimal changes to the code are required:
-Dwarf_Detection:
-  Line 1518: Adjust the path of it to your 'Candidates' folder
