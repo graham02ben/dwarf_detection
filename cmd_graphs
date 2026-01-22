@@ -7,10 +7,10 @@ Created on Mon Jan 19 20:01:23 2026
 
 import math as m
 import numpy as np
+import Functions as f
 import matplotlib.pyplot as plt
 
 from numpy import inf
-import Functions as f
 
 def plot_cmd_mode(
     *,
@@ -155,3 +155,64 @@ def plot_cmd_mode(
     plt.show()
 
     return coordinates, fig
+
+def Candidate_CMD(c_immap, candidate_coords, gmag_star_data, rmag_star_data,
+                  NewIsoG, NewIsoR, NewIsog, NewIsor,
+                  isochrone_labels,
+                  radius = 0.016667, radiusin = 0.0288667, radiusout = 0.0333333):
+    """
+    This creates a new CMD for the updated coordinates (very much like before)
+    It plots the member stars above the background stars, and in another plot,
+    plots the field population.
+
+
+    Returns
+    -------
+    fig_CMD
+
+    """
+    fig, ax = plt.subplots(1, 2,sharey=True, gridspec_kw={'width_ratios': [1, 1]})
+    distance = c_immap.separation(candidate_coords)
+    select = distance.degree < radius
+    dselect = (distance.degree < radiusout) & (distance.degree > radiusin)
+    prob = f.isochrone(gmag_star_data[select],rmag_star_data[select],NewIsoG,NewIsoR,NewIsog,NewIsor)
+    PCMavs = f.PCMD_av(gmag_star_data[select] - rmag_star_data[select],rmag_star_data[select], (NewIsoG[prob]- NewIsoR[prob]), (NewIsoR[prob]),(NewIsog[prob]- NewIsor[prob]),(NewIsor[prob]))
+    fieldprob = f.PCMD_av(gmag_star_data[dselect] - rmag_star_data[dselect],rmag_star_data[dselect], (NewIsoG[prob] - NewIsoR[prob]), (NewIsoR[prob]),(NewIsog[prob] - NewIsor[prob]),(NewIsor[prob]))
+    ###PLOT AROUND CHOSEN SPACE
+    x, y, p, loop4_df, loop3_df, iso4_df, iso3_df, inside, insidem = f.box(prob, gmag_star_data[select], rmag_star_data[select], NewIsor, NewIsog, NewIsoR, NewIsoG)
+    #plotting desired Isochrone
+    ax[0].plot(iso4_df['color_g_r'], iso4_df['mag_r'], c = '0.5')
+    ax[0].plot(iso3_df['color_G_R'], iso3_df['mag_R'], c = '0.5')
+    ax[1].plot(iso4_df['color_g_r'], iso4_df['mag_r'], c = '0.5')
+    ax[1].plot(iso3_df['color_G_R'], iso3_df['mag_R'], c = '0.5')
+    #plotting CM cuts
+    ax[0].plot(loop4_df['color4_loop'],loop4_df['mag4_loop'])
+    ax[0].plot(loop3_df['color3_loop'],loop3_df['mag3_loop'])
+    #background stars
+    ax[0].scatter(gmag_star_data-rmag_star_data,rmag_star_data,color = 'grey', alpha = 0.2, s = 10)
+    #Plotting the stars more relatable to dwarf
+    cs = ax[0].scatter(x, y, marker = 'o', c=p, cmap = 'plasma')
+    cbar = plt.colorbar(cs,  label = 'Membership Probability')#, ax=axs[0])
+    #Field population
+    ax[1].scatter(gmag_star_data[dselect] - rmag_star_data[dselect], rmag_star_data[dselect], color = 'black', alpha = 0.5)
+    #axis
+    ax[0].set_xlim(-0.5,2.5)
+    ax[0].set_ylim(20,26)
+    ax[1].set_xlim(-0.5,2.5)
+    ax[1].set_ylim(20,26)
+    ax[0].set_title('Candidate', fontsize = 12)
+    ax[0].set_xlabel('g-r (mag)', fontsize = 12)
+    ax[0].set_ylabel('r (mag)', fontsize = 12)
+    ax[1].set_title('Field', fontsize = 12)
+    ax[1].set_xlabel('g-r (mag)', fontsize = 12)
+    ax[0].set_aspect('equal')
+    ax[1].set_aspect('equal')
+    plt.gca().invert_yaxis()
+    plt.subplots_adjust(wspace=0)
+    plt.tight_layout()
+    ratio = PCMavs/fieldprob
+    metal_of_isochrone = isochrone_labels[prob]
+    print('The ratio of a star being a member of a dwarf galaxy compared to the field population is', ratio)
+    print('Isochrone Metallicity:', metal_of_isochrone)
+
+    return fig, ratio, metal_of_isochrone
