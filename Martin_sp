@@ -1,5 +1,8 @@
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from scipy import integrate as ingt
+from sklearn.linear_model import LinearRegression
 
 """
 This is an implementation of Martin et al 2016's MCMC dwarf galaxy structural 
@@ -41,8 +44,6 @@ def lphot(params, x, y):
     return sum(np.log(rhom[c1]))
 
 ### Defining our priors - broad, uniform values, the same as Martin et al. 2016. User can specify limits on x, y and rh.
-
- 
 def prior(params, priors):
     x0, y0, rh, e, theta, n = params
     xd, xu, yd, yu, rhu = priors
@@ -51,10 +52,102 @@ def prior(params, priors):
     return -np.inf
 
 ### Function to call priors and PDF function
-
 def lnp(params, priors, x, y):
     lp = prior(params, priors)
     if not np.isfinite(lp):
         return -np.inf
     return lp + lphot(params, x, y)
 
+
+
+
+
+def Radial_Proflie(rar, decr, x0m33, y0m33, em33, tm33, nm33, rhm33, five_arcmin, c_immap, candidate_coords):
+    """
+    Generates two radial profiles. The first is an exponential one, plotting the
+    points with respect to the model seen in Martin 2016.
+    The second one is a log linear one to see how well correlated the points are
+    together.
+
+    """
+    fig, ax = plt.subplots(1, 2, figsize = (11,4))
+
+    # Exponential ======================================================
+    
+    NN = 1/(1-em33[0])
+    r1 = (NN*((rar[five_arcmin] - np.radians(x0m33[0])) * np.cos(np.radians(y0m33[0])) * np.cos(np.radians(tm33[0])) - (decr[five_arcmin] - np.radians(y0m33[0])) * np.sin(np.radians(tm33[0]))))**2
+    r2 = ((rar[five_arcmin] - np.radians(x0m33[0])) * np.cos(np.radians(y0m33[0])) * np.sin(np.radians(tm33[0])) + (decr[five_arcmin]- np.radians(y0m33[0])
+                                                                                                                    ) * np.cos(np.radians(tm33[0]))) ** 2
+    #times by cos(dec) because deprojection
+    rrgb = np.sqrt(r1 + r2)  * 180. / np.pi * 60
+    bins = np.arange(0,5,0.1)
+    num = np.histogram(rrgb, bins = bins)
+    area = num[1] ** 2 * np.pi  #(pi r^2)
+    carea = np.zeros(len(num[0])) 
+    for i in range(len(area) - 1):
+        carea[i] = area[i+1] - area[i]    
+        avrgb = num[0] / carea
+    a_start_bin = 1  # Define the bin where the integration for the dwarf profile starts
+    a_end_bin = 8  # Define the bin where the integration for the dwarf profile ends
+    
+    # Calculate the integral of the dwarf profile over the area a
+    integral_dwarf_density = np.sum(avrgb[a_start_bin:a_end_bin] * carea[a_start_bin:a_end_bin])
+    # Calculate the total area (A)
+    total_area = np.sum(carea)
+    # Calculate the background (sigma_b)
+    background = ((nm33[0]+nm33[1]) - integral_dwarf_density) / total_area
+    
+    ax[0].set_xlim(0.05, 2)
+    ax[0].set_xlabel("Radius (arcmin)", fontsize = 12)
+    ax[0].set_ylabel(r"$\Sigma$ (N$_*$/arcmin$^2$)", fontsize = 12)
+
+    x = np.arange(0, 4.9, 0.1)
+    ax[0].errorbar(x, avrgb, yerr = np.sqrt(avrgb),fmt = 'o', markersize = 10, c = 'k')
+    xax = np.arange(0.05, 5, 0.01)
+    yp = (1.68 **2 / (2 * np.pi * rhm33[0] **2 * (1 - em33[0]))) * (nm33[0]+nm33[1]) * np.exp(-1.68 * xax / rhm33[0]) + background
+    ax[0].plot(xax, yp, c = 'k')
+    
+
+    # Log Linear =======================================================
+    distances = []
+    Distances = c_immap.separation(candidate_coords) * 60 
+    distances.append(Distances)
+    bins = 10
+    Nums, radiuss = np.histogram(distances, bins = bins, range = (0,1))  #creating hist data and width of bins
+    radiuss = radiuss[1:]#.deg #reshaping binsg so match length of hist
+    areas = []   #empty lists for the next loop   
+    for j in range(bins):
+        areas.append(np.pi*radiuss[j]**2 )   #area of annulus of different 
+    Number_density = []
+    for k in range(len(areas)):
+        if k == 0:
+            Number_density.append(Nums[k]/(areas[k]))
+        else:
+            Number_density.append(Nums[k]/(areas[k]-areas[k-1]))    
+    ax[1].scatter(radiuss,Number_density)            #creating scatter
+    ax[1].set_xlabel('Radius (arcmin)', fontsize = 12)
+    ax[1].set_yscale('log')
+    ax[1].set_ylim(1,1e3)
+    #LINEAR REGRESSION STUFF
+    Xs = radiuss             #x 
+    Ys = np.log10(Number_density)   #loging y
+    yes = np.isfinite(Ys)  #selection
+    Xs = Xs[yes]
+    Ys = Ys[yes]
+    Xs = Xs.reshape(-1,1)    #reshaping for later
+    Ys = Ys.reshape(-1,1)
+    Models = LinearRegression()
+    Models.fit(Xs, Ys)       #creating linear regression model
+    Xs_plot_vals = np.arange(0,100)   #creating Xs valyes to plot    
+    Ys_pred = Models.predict(Xs_plot_vals.reshape(-1,1))   #predicitng corresponding y values
+    Ys_pred_log = 10**Ys_pred                 #un log those y valyes
+    s_df = pd.DataFrame({'Radius': Xs_plot_vals, '$\Sigma$':Ys_pred_log.flatten()}) #creating data frame for ez plot
+    ax[1].plot(s_df['Radius'], s_df['$\Sigma$'], c = 'k')
+    ax[1].set_xlim(0,1)
+
+    ax[1].set_ylabel(r"Log($\Sigma$)", fontsize = 12)
+    r = np.sqrt(Models.score(Xs, Ys))
+    Int = Models.intercept_
+    print('r coefficient =' , r, 'and Intercept', Int)
+    
+    return fig
