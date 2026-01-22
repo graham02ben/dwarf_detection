@@ -13,7 +13,7 @@ from sklearn.cluster import KMeans
 
 def Davies_Bouldin_graph(davies_bouldin_avg, range_n_clusters):
     """
-    Plots the Davies Bouldin scores for different values of K, showing the lowest value
+    Plots the Davies Bouldin scores for different values of K, showing lowest value
     as the optimal cluster number
 
     Returns
@@ -30,8 +30,8 @@ def Davies_Bouldin_graph(davies_bouldin_avg, range_n_clusters):
     
 def perform_cluster_analysis(range_n_clusters, telecoords):
     """
-    For the map, it assigns k-means between 2-40 clusters. How well do these fit
-    are judged on a score using the Davies Bouldin index to determine the 
+    For the map, it assigns k-means between 2-40 clusters. How well these fit
+    are judged on a score using the Davies Bouldin to determine the 
     number of clusters. 
 
     Returns
@@ -66,7 +66,6 @@ def perform_cluster_analysis(range_n_clusters, telecoords):
     kmeans.fit(telecoords)
 
     # Get cluster labels and cluster centres
-    cluster_labels = kmeans.labels_
     cluster_centers = kmeans.cluster_centers_
     
-    return davies_bouldin_avg, wcss, cluster_labels, cluster_centers
+    return davies_bouldin_avg, cluster_centers
